@@ -1,0 +1,29 @@
+{
+    "envName":"InvertedPendulum-v2",
+    "gamma": 0.99,
+    "tau":0.005,
+    "updateInterval":1000,
+    "runStep":300e3,
+    "startStep":1e4,
+    "actionSize":2,
+    "fixedTemp":true,
+    "tempValue":0.2,
+
+    "replayMemory":1e6,
+    "batchSize":256,
+    "learningFrequency":1,
+    "rScalinbg":20,
+    "sPath":"./save/SAC/",
+    "writeTMode":false,
+    "tPath":"./tensorboard/SAC/",
+    "lPath":false,
+    "device":"cuda:0",
+    "hostName":"localhost",
+
+    "optim":{
+
+    },
+    "agent":{
+
+    }
+}
