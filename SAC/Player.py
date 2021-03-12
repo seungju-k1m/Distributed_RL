@@ -1,8 +1,9 @@
 import gym
 import redis
 import torch
+import _pickle
 import numpy as np
-from SAC.config import SACConfig
+from SAC.Config import SACConfig
 from baseline.baseAgent import baseAgent
 from typing import Tuple
 
@@ -16,7 +17,7 @@ class sacPlayer:
         self.env = gym.make(self.config.envName)
 
     def buildModel(self):
-        for netName, data in self.config.Agent.itmes():
+        for netName, data in self.config.agent.items():
             if netName == "actor":
                 self.actor = baseAgent(data)
             elif netName == "critic":
@@ -37,9 +38,10 @@ class sacPlayer:
 
     def getAction(self, state: np.array, dMode=False) -> np.array:
         with torch.no_grad():
-            state = [torch.tensor(state).float().to(self.tDevice)]
+            state = torch.tensor(state).float().to(self.tDevice)
+            state = [torch.unsqueeze(state, 0)]
             output = self.actor.forward(state)[0]
-            mean, log_std = output[:, :self.config.actionSize], output
+            mean, log_std = output[:, : self.config.actionSize], output
             std = log_std.exp()
 
             if dMode:
@@ -48,11 +50,14 @@ class sacPlayer:
                 gaussianDist = torch.distributions.Normal(mean, std)
                 x_t = gaussianDist.rsample()
                 action = torch.tanh(x_t)
-            return action.cpu().numpy()
+            return action.cpu().numpy()[0]
 
     def _pull_param(self):
         params = self._connect.get("params")
         pass
+
+    def append_memory(self, sars):
+        self._connect.rpush("sample", _pickle.dumps(sars))
 
     def calulateLoss(self, state, target, pastActions) -> Tuple[torch.tensor]:
         state: torch.tensor
@@ -67,13 +72,16 @@ class sacPlayer:
         critic01 = self.critic01.forward(tuple([stateAction]))[0]
         critic02 = self.critic02.forward(tuple([stateAction]))[0]
 
-        lossCritic1 = torch.mean((critic01-target).pow(2)/2)
-        lossCritic2 = torch.mean((critic02-target).pow(2)/2)
+        lossCritic1 = torch.mean((critic01 - target).pow(2) / 2)
+        lossCritic2 = torch.mean((critic02 - target).pow(2) / 2)
 
         actor_state = state.clone()
-        
+
         output = self.actor.forward(tuple([actor_state]))[0]
-        mean, log_std = output[:, :self.config.actionSize], output[:, self.config.actionSize:]
+        mean, log_std = (
+            output[:, : self.config.actionSize],
+            output[:, self.config.actionSize :],
+        )
         log_std = torch.clamp(log_std, -20, 2)
         std = log_std.exp()
 
@@ -81,8 +89,8 @@ class sacPlayer:
         x_t = gaussianDist.rsample()
         action = torch.tanh(x_t)
         logProb = gaussianDist.log_prob(x_t).sum(1, keepdim=True)
-        logProb -= torch.log(1-action.pow(2)+1e-6).sum(1, keepdim=True)
-        entropy = (torch.log(std * (2 * 3.14)**0.5)+0.5).sum(1, keepdim=True)
+        logProb -= torch.log(1 - action.pow(2) + 1e-6).sum(1, keepdim=True)
+        entropy = (torch.log(std * (2 * 3.14) ** 0.5) + 0.5).sum(1, keepdim=True)
 
         cat = torch.cat((state, action), dim=1)
 
@@ -95,7 +103,7 @@ class sacPlayer:
             tempDetached = self.temperature.exp().detach()
         else:
             tempDetached = self.config.temperature
-        
+
         lossPolicy = torch.mean(tempDetached * logProb - Actor_critic)
         detachedLogProb = logProb.detach()
         if self.config.fixedTemp:
@@ -107,8 +115,42 @@ class sacPlayer:
             return lossPolicy, lossCritic1, lossCritic2
 
     def run(self):
+        rewards = 0
+        step = 1
+        episode = 1
 
-        state = self.env.reset()
         while 1:
+            state = self.env.reset()
+            action = self.getAction(state)
+            done = False
+            while done is False:
+                nextState, reward, done, _ = self.env.step(action)
+                step += 1
 
+                self.append_memory(
+                    (
+                        state.copy(),
+                        action.copy(),
+                        reward * self.config.rScaling,
+                        nextState.copy(),
+                        done,
+                    )
+                )
+
+                state = nextState
+                self.env.render()
+                action = self.getAction(state)
+                rewards += reward
+
+            episode += 1
+
+            if (episode % 50) == 0:
+                print(
+                    """
+                Episode:{} // Step:{} // Reward:{} 
+                """.format(
+                        episode, step, rewards / 50
+                    )
+                )
+                rewards = 0
 

@@ -1,4 +1,7 @@
-import redis
+from SAC.Player import sacPlayer
+from SAC.config import SACConfig
 
-rd = redis.StrictRedis(host='localhost', port=6379, db=0)
-rd.set(1, 100)
+
+config = SACConfig('./cfg/SAC.json')
+actor = sacPlayer(config)
+actor.run()
