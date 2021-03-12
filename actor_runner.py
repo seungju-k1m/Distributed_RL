@@ -2,13 +2,14 @@ import ray
 import argparse
 
 from SAC.Player import sacPlayer
+from SAC.Learner import Learner
 from SAC.Config import SACConfig
 
-NUMSIM = 8
+NUMSIM = 2
 
 
 ray.init(
-    num_cpus=16,
+    num_cpus=8,
     num_gpus=1
 )
 
