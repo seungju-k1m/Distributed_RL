@@ -22,6 +22,7 @@ class Learner:
         self._memory = Replay(self.config, connect=self._connect)
         self._memory.start()
         self.device = torch.device(self.config.device)
+        self.to()
 
     def buildModel(self):
         for netName, data in self.config.agent.items():
@@ -34,12 +35,20 @@ class Learner:
                 self.tCritic02 = baseAgent(data)
 
         if self.config.fixedTemp:
+            self.temperature = self.config.tempValue
 
+        else:
             self.temperature = torch.zeros(
                 1, requires_grad=True, device=self.config.device
             )
-        else:
-            self.temperature = self.config.tempValue
+
+    def to(self):
+        self.actor.to(self.device)
+        self.critic01.to(self.device)
+        self.critic02.to(self.device)
+
+        self.tCritic01.to(self.device)
+        self.tCritic02.to(self.device)
 
     def genOptim(self):
         for key, value in self.config.optim.items():
@@ -51,7 +60,7 @@ class Learner:
                 self.cOptim02 = getOptim(value, self.critic02.buildOptim())
 
             if key == "temperature":
-                if ~self.config.fixedTemp:
+                if self.config.fixedTemp is False:
                     self.tOptim = getOptim(value, self.temperature, floatV=True)
 
     def zeroGrad(self):
@@ -66,6 +75,7 @@ class Learner:
             output[:, : self.config.actionSize],
             output[:, self.config.actionSize :],
         )
+        log_std = torch.clamp(log_std, -20, 2)
         std = log_std.exp()
 
         normal = torch.distributions.Normal(mean, std)
@@ -87,60 +97,40 @@ class Learner:
                 break
             time.sleep(0.1)
 
-    def calulateLoss(self, state, target, pastActions) -> Tuple[torch.tensor]:
-        state: torch.tensor
-        target: torch.tensor
-        pastActions: torch.tensor
-        alpha: float
-
-        # 1. Calculate the loss of Critics/
-
-        critic_state = state.clone()
-        stateAction = torch.cat((critic_state, pastActions), dim=1).detach()
+    def calculateQ(self, state, target, action):
+        stateAction = torch.cat((state, action), dim=1).detach()
         critic01 = self.critic01.forward(tuple([stateAction]))[0]
         critic02 = self.critic02.forward(tuple([stateAction]))[0]
 
         lossCritic1 = torch.mean((critic01 - target).pow(2) / 2)
         lossCritic2 = torch.mean((critic02 - target).pow(2) / 2)
 
-        actor_state = state.clone()
+        return lossCritic1, lossCritic2
+    
+    def calculateActor(self, state):
 
-        output = self.actor.forward(tuple([actor_state]))[0]
-        mean, log_std = (
-            output[:, : self.config.actionSize],
-            output[:, self.config.actionSize :],
-        )
-        log_std = torch.clamp(log_std, -20, 2)
-        std = log_std.exp()
+        # 2. Calculate the loss of Actor
+        actor_state = state.clone().detach()
 
-        gaussianDist = torch.distributions.Normal(mean, std)
-        x_t = gaussianDist.rsample()
-        action = torch.tanh(x_t)
-        logProb = gaussianDist.log_prob(x_t).sum(1, keepdim=True)
-        logProb -= torch.log(1 - action.pow(2) + 1e-6).sum(1, keepdim=True)
-        entropy = (torch.log(std * (2 * 3.14) ** 0.5) + 0.5).sum(1, keepdim=True)
-
-        cat = torch.cat((state, action), dim=1)
-
-        Actor_critic01 = self.critic01.forward(cat)[0]
-        Actor_critic02 = self.critic02.forward(cat)[0]
-
-        Actor_critic = torch.mean(Actor_critic01, Actor_critic02)
+        action, logProb, critics, entropy = self.forward(actor_state)
+        c1, c2 = critics[0][0], critics[1][0]
+        Actor_critic = torch.min(c1, c2)
 
         if self.config.fixedTemp:
-            tempDetached = self.temperature.exp().detach()
+            tempDetached = self.temperature
         else:
-            tempDetached = self.config.temperature
+            tempDetached = self.temperature.exp().detach()
 
-        lossPolicy = torch.mean(tempDetached * logProb - Actor_critic)
+        lossPolicy = torch.mean((tempDetached * logProb - Actor_critic))
         detachedLogProb = logProb.detach()
         if self.config.fixedTemp:
+            return lossPolicy
+
+        else:
             lossTemp = torch.mean(
                 self.temperature.exp() * (-detachedLogProb + self.config.actionSize)
             )
-            return lossPolicy, lossCritic1, lossCritic2, lossTemp
-        else:
-            return lossPolicy, lossCritic1, lossCritic2
+            return lossPolicy, lossTemp
 
     def train(self, transition):
         state, action, reward, next_state, done = [], [], [], [], []
@@ -149,16 +139,18 @@ class Learner:
 
             for s, a, r, s_, d in transition:
                 s: np.array  # 1*stateSize
-                state.append(torch.tensor(s).float().to(self.device))
+                state.append(torch.tensor(s).float().to(self.device).view(1, -1))
                 action.append(torch.tensor(a).float().to(self.device).view(1, -1))
                 reward.append(r)
-                next_state.append(torch.tensor(s_).float().to(self.device))
+                next_state.append(torch.tensor(s_).float().to(self.device).view(1, -1))
                 done.append(d)
 
             stateBatch = torch.cat(state, dim=0)
-            nextStateBatch = torch.cat(next_state, dim=0)
             actionBatch = torch.cat(action, dim=0)
-            reward = torch.tensor(reward).float().to(self.device)
+
+            nextStateBatch = torch.cat(next_state, dim=0)
+
+            reward = torch.tensor(reward).float().to(self.device).view(-1, 1)  # 256
             next_actionBatch, logProbBatch, _, entropyBatch = self.forward(
                 nextStateBatch
             )
@@ -167,85 +159,72 @@ class Learner:
             tCritic1 = self.tCritic01.forward([next_state_action])[0]
             tCritic2 = self.tCritic02.forward([next_state_action])[0]
 
-            done = torch.tensor(~done).float().to(self.device)
+            mintarget = torch.min(tCritic1, tCritic2)
+
+            done = torch.tensor(done).float()
+            done -= 1
+            done *= -1
+            done = done.to(self.device).view(-1, 1)
 
             if self.config.fixedTemp:
                 temp = -self.temperature * logProbBatch
             else:
                 temp = -self.temperature.exp() * logProbBatch
 
-            target1 = reward + (tCritic1 + temp) * self.config.gamma * done
-            target2 = reward + (tCritic2 + temp) * self.config.gamma * done
-
-            state_action = torch.cat((stateBatch, actionBatch), dim=1)
-            Q1 = self.critic01.forward(state_action)[0]
-            Q2 = self.critic02.forward(state_action)[0]
-
-            delta = torch.nn.functional.smooth_l1_loss(
-                torch.min(Q1, Q2), torch.min(target1, target2), reduce=False
-            )
-            prios = (delta.abs() + 1e-5).pow(self.config.alpha)
-
-        if self.config.fixedTemp:
-            lossP, lossC1, lossC2, lossT = self.calulateLoss(
-                stateBatch, (target1, target2), actionBatch
-            )
-        else:
-            lossP, lossC1, lossC2 = self.calulateLoss(
-                stateBatch, (target1, target2), actionBatch
-            )
+            mintarget = reward + (mintarget + temp) * self.config.gamma * done
 
         self.zeroGrad()
 
-        lossP.backward()
-        self.critic01.zero_grad()
-        self.critic02.zero_grad()
+        lossC1, lossC2 = self.calculateQ(stateBatch, mintarget, actionBatch)
         lossC1.backward()
         lossC2.backward()
-        if ~self.config.fixedTemp:
-            lossT.backward()
-
         self.cOptim01.step()
         self.cOptim02.step()
 
-        if ~self.config.fixedTemp:
+        if self.config.fixedTemp:
+            lossP = self.calculateActor(stateBatch)
+            lossP.backward()
+            self.aOptim.step()
+        
+        else:
+            lossP, lossT = self.calculateActor(stateBatch)
+            lossP.backward()
+            lossT.backward()
+            self.aOptim.step()
             self.tOptim.step()
-
-        return delta, prios
 
     def targetNetworkUpdate(self):
         with torch.no_grad():
-            self.tCritic01.updateParameter(self.Critic01, 1)
-            self.tCritic02.updateParameter(self.critic02, 1)
+            self.tCritic01.updateParameter(self.critic01, self.config.tau)
+            self.tCritic02.updateParameter(self.critic02, self.config.tau)
 
     def state_dict(self):
         weights = [
             self.actor.state_dict(),
             self.critic01.state_dict(),
             self.critic02.state_dict(),
+            self.tCritic01.state_dict(),
+            self.tCritic02.state_dict(),
         ]
-        if ~self.config.fixedTemp:
+        if self.config.fixedTemp is False:
             weights.append(self.temperature)
         return tuple(weights)
 
     def run(self):
         self._wait_memory()
+        print("Trainig Start!!")
         BATCHSIZE = self.config.batchSize
         BETA0 = self.config.beta0
         BETADECAY = self.config.betaDecay
 
         for t in count():
-            transitions, prios, indices = self._memory.sample(BATCHSIZE)
-            total = len(self._memory)
-            beta = min(1.0, BETA0 + (1 - BETA0) / BETADECAY * t)
-
-            weights = (total * np.array(prios) / self._memory.total_prios) ** (-beta)
-            weights /= weights.max()
+            transitions = self._memory.sample(BATCHSIZE)
 
             self.zeroGrad()
-            delta, prior = self.train(transitions)
-            self._memory.update_priorities(
-                indices, prior.sequeeze(1).cpu().numpy().tolist()
-            )
+
+            self.train(transitions)
             self.targetNetworkUpdate()
-            self._connect.set("params", dumps(self.state_dict()))
+            if (t + 1) % 100 == 0:
+                self._connect.set("params", dumps(self.state_dict()))
+                print("Step: {}".format(t))
+

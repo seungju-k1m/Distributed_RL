@@ -2,7 +2,7 @@ import time
 import threading
 import redis
 
-from baseline.utils import PrioritizedMemory, loads
+from baseline.utils import PrioritizedMemory, loads, ReplayMemory
 from SAC.Config import SACConfig
 
 
@@ -13,7 +13,8 @@ class Replay(threading.Thread):
         # main thread가 종료되면 그 즉시 종료되는 thread이다.
         self.setDaemon(True)
 
-        self._memory = PrioritizedMemory(int(config.replayMemory))
+        # self._memory = PrioritizedMemory(int(config.replayMemory))
+        self._memory = ReplayMemory(int(config.replayMemory))
 
         self._connect = connect
         self._connect.delete("sample")
@@ -27,17 +28,10 @@ class Replay(threading.Thread):
             data = pipe.execute()[0]
             if data is not None:
                 for d in data:
-                    p, t = loads(d)
-                    self._memory.push(t, p)
+                    p= loads(d)
+                    with self._lock:
+                        self._memory.push(p)
             time.sleep(0.01)
-
-    def update_priorities(self, indices, priorities):
-        with self._lock:
-            self._memory.update_priorities(indices, priorities)
-
-    def remove_to_fit(self):
-        with self._lock:
-            self._memory.remove_to_fit()
 
     def sample(self, batch_size):
         with self._lock:
@@ -45,7 +39,3 @@ class Replay(threading.Thread):
 
     def __len__(self):
         return len(self._memory)
-
-    @property
-    def total_prios(self):
-        return self._memory.total_prios()

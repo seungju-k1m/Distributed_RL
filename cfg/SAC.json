@@ -1,11 +1,11 @@
 {
-    "envName":"InvertedPendulum-v2",
+    "envName":"Humanoid-v2",
     "gamma": 0.99,
     "tau":0.005,
     "updateInterval":1000,
     "runStep":300e3,
     "startStep":1e4,
-    "actionSize":1,
+    "actionSize":17,
     "fixedTemp":true,
     "tempValue":0.2,
     "alpha":0.6,
@@ -14,13 +14,12 @@
 
     "replayMemory":1e6,
     "batchSize":256,
-    "learningFrequency":1,
     "rScaling":20,
     "sPath":"./save/SAC/",
     "writeTMode":false,
     "tPath":"./tensorboard/SAC/",
     "lPath":false,
-    "device":"cpu",
+    "device":"cuda:0",
     "hostName":"localhost",
 
     "optim":{
@@ -44,9 +43,9 @@
         "actor":{
             "module00":{
                 "netCat":"MLP",
-                "iSize":4,
+                "iSize":376,
                 "nLayer":3,
-                "fSize":[256, 256, 2],
+                "fSize":[256, 256, 34],
                 "act":["relu", "relu", "linear"],
                 "BN":false,
                 "output":true,
@@ -57,7 +56,7 @@
         "critic":{
             "module00":{
                 "netCat":"MLP",
-                "iSize":5,
+                "iSize":393,
                 "nLayer":3,
                 "fSize":[256, 256, 1],
                 "act":["relu", "relu", "linear"],

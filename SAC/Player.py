@@ -1,3 +1,4 @@
+import ray
 import gym
 import redis
 import torch
@@ -8,13 +9,18 @@ from baseline.baseAgent import baseAgent
 from typing import Tuple
 
 
+@ray.remote(num_gpus=0.2)
 class sacPlayer:
     def __init__(self, config: SACConfig):
         self.config = config
+        self.device = torch.device(self.config.device)
         self.buildModel()
         self._connect = redis.StrictRedis(host=self.config.hostName)
-        self.device = torch.device(self.config.device)
+        self._connect.delete("params")
+        # self.device = torch.device("")
+        # torch.cuda.set_device(0)
         self.env = gym.make(self.config.envName)
+        self.to()
 
     def buildModel(self):
         for netName, data in self.config.agent.items():
@@ -22,11 +28,13 @@ class sacPlayer:
                 self.actor = baseAgent(data)
             elif netName == "critic":
                 self.critic01 = baseAgent(data)
+                self.tCritic1 = baseAgent(data)
                 self.critic02 = baseAgent(data)
+                self.tCritic2 = baseAgent(data)
 
         if self.config.fixedTemp:
             self.temperature = torch.zeros(
-                1, requires_grad=True, device=self.config.device
+                1, requires_grad=True, device=self.device
             )
         else:
             self.temperature = self.config.temperature
@@ -38,6 +46,7 @@ class sacPlayer:
             output[:, : self.config.actionSize],
             output[:, self.config.actionSize :],
         )
+        log_std = torch.clamp(log_std, -20, 2)
         std = log_std.exp()
 
         normal = torch.distributions.Normal(mean, std)
@@ -74,8 +83,8 @@ class sacPlayer:
             )
             next_state_action = torch.cat((nextStateBatch, next_actionBatch), dim=1)
 
-            tCritic1 = self.critic01.forward([next_state_action])[0]
-            tCritic2 = self.critic02.forward([next_state_action])[0]
+            tCritic1 = self.tCritic1.forward([next_state_action])[0]
+            tCritic2 = self.tCritic2.forward([next_state_action])[0]
 
             done = torch.tensor(done).float().to(self.device).view(1, -1)
 
@@ -94,7 +103,14 @@ class sacPlayer:
             delta = torch.nn.functional.smooth_l1_loss(
                 torch.min(Q1, Q2), torch.min(target1, target2), reduce=False
             )
-            prios = (delta.abs() + 1e-5).pow(self.config.alpha).view(-1).cpu().numpy().tolist()
+            prios = (
+                (delta.abs() + 1e-5)
+                .pow(self.config.alpha)
+                .view(-1)
+                .cpu()
+                .numpy()
+                .tolist()
+            )
 
         return delta, prios
 
@@ -102,30 +118,40 @@ class sacPlayer:
         device = torch.device(self.config.device)
         self.critic01.to(device)
         self.critic02.to(device)
+        self.tCritic1.to(device)
+        self.tCritic2.to(device)
         self.actor.to(device)
 
     def getAction(self, state: np.array, dMode=False) -> np.array:
-        with torch.no_grad():
-            state = torch.tensor(state).float().to(self.device)
-            state = [torch.unsqueeze(state, 0)]
-            output = self.actor.forward(state)[0]
-            mean, log_std = (
-                output[:, : self.config.actionSize],
-                output[:, self.config.actionSize :],
-            )
-            std = log_std.exp()
 
-            if dMode:
-                action = torch.tanh(mean)
-            else:
-                gaussianDist = torch.distributions.Normal(mean, std)
-                x_t = gaussianDist.rsample()
-                action = torch.tanh(x_t)
-            return action.cpu().numpy()[0]
+        state = torch.tensor(state).float().to(self.device)
+        state = [torch.unsqueeze(state, 0)]
+        output = self.actor.forward(state)[0]
+        mean, log_std = (
+            output[:, : self.config.actionSize],
+            output[:, self.config.actionSize :],
+        )
+        std = log_std.exp()
+
+        if dMode:
+            action = torch.tanh(mean)
+        else:
+            gaussianDist = torch.distributions.Normal(mean, std)
+            x_t = gaussianDist.rsample()
+            action = torch.tanh(x_t)
+        return action.detach().cpu().numpy()[0]
 
     def _pull_param(self):
         params = self._connect.get("params")
-        pass
+        if params is not None:
+            params = _pickle.loads(params)
+            self.actor.load_state_dict(params[0])
+            self.critic01.load_state_dict(params[1])
+            self.critic02.load_state_dict(params[2])
+            self.tCritic1.load_state_dict(params[3])
+            self.tCritic2.load_state_dict(params[4])
+            if self.config.fixedTemp:
+                self.temperature = params[-1]
 
     def run(self):
         rewards = 0
@@ -139,7 +165,7 @@ class sacPlayer:
             while done is False:
                 nextState, reward, done, _ = self.env.step(action)
                 step += 1
-
+                # print(reward)
                 sample = (
                     state.copy(),
                     action.copy(),
@@ -147,17 +173,17 @@ class sacPlayer:
                     nextState.copy(),
                     done,
                 )
-                _, prior = self.calc_priorities(sample)
-
                 self._connect.rpush(
-                    "sample",
-                    _pickle.dumps((sample, prior)),
+                    "sample", _pickle.dumps(sample)
                 )
 
                 state = nextState
                 self.env.render()
                 action = self.getAction(state)
                 rewards += reward
+
+                if (step % 100) == 0:
+                    self._pull_param()
 
             episode += 1
 
@@ -170,4 +196,3 @@ class sacPlayer:
                     )
                 )
                 rewards = 0
-

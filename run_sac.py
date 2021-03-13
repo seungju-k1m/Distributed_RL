@@ -5,7 +5,7 @@ from SAC.Player import sacPlayer
 from SAC.Learner import Learner
 from SAC.Config import SACConfig
 
-NUMSIM = 2
+NUMSIM = 4
 
 
 ray.init(
@@ -16,8 +16,9 @@ ray.init(
 config = SACConfig('./cfg/SAC.json')
 
 # not instance
-remoteNetwork = ray.remote(sacPlayer)
+# remoteNetwork = ray.remote(sacPlayer)
+# remoteNetwork.options(num_gpus=0.25)
 Networks = []
 for i in range(NUMSIM):
-    Networks.append(remoteNetwork.remote(config))
+    Networks.append(sacPlayer.remote(config))
 ray.get([Network.run.remote() for Network in Networks])
