@@ -1,3 +1,4 @@
+import gc
 import time
 import threading
 import redis
@@ -21,17 +22,21 @@ class Replay(threading.Thread):
         self._lock = threading.Lock()
 
     def run(self):
+        t = 0
         while True:
+            t += 1
             pipe = self._connect.pipeline()
             pipe.lrange("sample", 0, -1)
             pipe.ltrim("sample", -1, 0)
             data = pipe.execute()[0]
             if data is not None:
                 for d in data:
-                    p= loads(d)
+                    p = loads(d)
                     with self._lock:
                         self._memory.push(p)
             time.sleep(0.01)
+            if (t % 100) == 0:
+                gc.collect()
 
     def sample(self, batch_size):
         with self._lock:

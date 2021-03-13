@@ -1,3 +1,4 @@
+import gc
 import time
 import redis
 import torch
@@ -214,8 +215,6 @@ class Learner:
         self._wait_memory()
         print("Trainig Start!!")
         BATCHSIZE = self.config.batchSize
-        BETA0 = self.config.beta0
-        BETADECAY = self.config.betaDecay
 
         for t in count():
             transitions = self._memory.sample(BATCHSIZE)
@@ -224,7 +223,10 @@ class Learner:
 
             self.train(transitions)
             self.targetNetworkUpdate()
+            self._connect.set("params", dumps(self.state_dict()))
+            self._connect.set("Count", dumps(t))
             if (t + 1) % 100 == 0:
-                self._connect.set("params", dumps(self.state_dict()))
+                
                 print("Step: {}".format(t))
+                # gc.collect()
 

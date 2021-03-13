@@ -5,7 +5,7 @@ from SAC.Player import sacPlayer
 from SAC.Learner import Learner
 from SAC.Config import SACConfig
 
-NUMSIM = 4
+NUMSIM = 2
 
 
 ray.init(

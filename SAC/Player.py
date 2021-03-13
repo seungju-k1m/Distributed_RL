@@ -1,3 +1,4 @@
+import gc
 import ray
 import gym
 import redis
@@ -17,10 +18,12 @@ class sacPlayer:
         self.buildModel()
         self._connect = redis.StrictRedis(host=self.config.hostName)
         self._connect.delete("params")
+        self._connect.delete("Count")
         # self.device = torch.device("")
         # torch.cuda.set_device(0)
         self.env = gym.make(self.config.envName)
         self.to()
+        self.countModel = -1
 
     def buildModel(self):
         for netName, data in self.config.agent.items():
@@ -33,9 +36,7 @@ class sacPlayer:
                 self.tCritic2 = baseAgent(data)
 
         if self.config.fixedTemp:
-            self.temperature = torch.zeros(
-                1, requires_grad=True, device=self.device
-            )
+            self.temperature = torch.zeros(1, requires_grad=True, device=self.device)
         else:
             self.temperature = self.config.temperature
 
@@ -143,15 +144,21 @@ class sacPlayer:
 
     def _pull_param(self):
         params = self._connect.get("params")
+        count = self._connect.get("Count")
+        
         if params is not None:
-            params = _pickle.loads(params)
-            self.actor.load_state_dict(params[0])
-            self.critic01.load_state_dict(params[1])
-            self.critic02.load_state_dict(params[2])
-            self.tCritic1.load_state_dict(params[3])
-            self.tCritic2.load_state_dict(params[4])
-            if self.config.fixedTemp:
-                self.temperature = params[-1]
+            if count is not None:
+                count = _pickle.loads(count)
+            if self.countModel != count:
+                params = _pickle.loads(params)
+                self.actor.load_state_dict(params[0])
+                self.critic01.load_state_dict(params[1])
+                self.critic02.load_state_dict(params[2])
+                self.tCritic1.load_state_dict(params[3])
+                self.tCritic2.load_state_dict(params[4])
+                if self.config.fixedTemp:
+                    self.temperature = params[-1]
+                self.countModel = count
 
     def run(self):
         rewards = 0
@@ -165,7 +172,6 @@ class sacPlayer:
             while done is False:
                 nextState, reward, done, _ = self.env.step(action)
                 step += 1
-                # print(reward)
                 sample = (
                     state.copy(),
                     action.copy(),
@@ -173,17 +179,15 @@ class sacPlayer:
                     nextState.copy(),
                     done,
                 )
-                self._connect.rpush(
-                    "sample", _pickle.dumps(sample)
-                )
+                self._connect.rpush("sample", _pickle.dumps(sample))
 
                 state = nextState
                 self.env.render()
                 action = self.getAction(state)
                 rewards += reward
 
-                if (step % 100) == 0:
-                    self._pull_param()
+                self._pull_param()
+            gc.collect()
 
             episode += 1
 
@@ -196,3 +200,4 @@ class sacPlayer:
                     )
                 )
                 rewards = 0
+                
