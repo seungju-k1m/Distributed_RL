@@ -1,2 +1,9 @@
-# Continuous_OffPolicy
-This repository is for off policy algorithms that handle continuous action space. PPO, SAC and my Algorithm
+# Distributed Reinforcment Learning.
+
+## Description
+
+
+This Repo is for implementation of Distributed RL,
+
+using by **Pytorch, Ray and Redis.**
+
