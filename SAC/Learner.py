@@ -1,5 +1,6 @@
 import gc
 import time
+import ray
 import redis
 import torch
 
@@ -9,10 +10,12 @@ from typing import Tuple
 from itertools import count
 from SAC.ReplayMemory import Replay
 from SAC.Config import SACConfig
-from baseline.utils import getOptim, dumps
+from baseline.utils import getOptim, dumps, loads
 from baseline.baseAgent import baseAgent
+from torch.utils.tensorboard import SummaryWriter
 
 
+@ray.remote(num_gpus=0.25, num_cpus=4)
 class Learner:
     def __init__(self, cfg: SACConfig):
         self.config = cfg
@@ -22,8 +25,13 @@ class Learner:
 
         self._memory = Replay(self.config, connect=self._connect)
         self._memory.start()
-        self.device = torch.device(self.config.device)
+        self.device = torch.device(self.config.leanerDevice)
+        self.tMode = self.config.writeTMode
+        self._connect.delete("sample")
+        self._connect.delete("Reward")
         self.to()
+        if self.tMode:
+            self.writer = SummaryWriter(self.config.tPath)
 
     def buildModel(self):
         for netName, data in self.config.agent.items():
@@ -40,7 +48,7 @@ class Learner:
 
         else:
             self.temperature = torch.zeros(
-                1, requires_grad=True, device=self.config.device
+                1, requires_grad=True, device=self.device
             )
 
     def to(self):
@@ -125,15 +133,15 @@ class Learner:
         lossPolicy = torch.mean((tempDetached * logProb - Actor_critic))
         detachedLogProb = logProb.detach()
         if self.config.fixedTemp:
-            return lossPolicy
+            return lossPolicy, entropy
 
         else:
             lossTemp = torch.mean(
                 self.temperature.exp() * (-detachedLogProb + self.config.actionSize)
             )
-            return lossPolicy, lossTemp
+            return lossPolicy, lossTemp, entropy
 
-    def train(self, transition):
+    def train(self, transition, step):
         state, action, reward, next_state, done = [], [], [], [], []
 
         with torch.no_grad():
@@ -183,16 +191,30 @@ class Learner:
         self.cOptim02.step()
 
         if self.config.fixedTemp:
-            lossP = self.calculateActor(stateBatch)
+            lossP, entropy = self.calculateActor(stateBatch)
             lossP.backward()
             self.aOptim.step()
         
         else:
-            lossP, lossT = self.calculateActor(stateBatch)
+            lossP, lossT, entropy = self.calculateActor(stateBatch)
             lossP.backward()
             lossT.backward()
             self.aOptim.step()
             self.tOptim.step()
+        
+        if self.tMode:
+            with torch.no_grad():
+                _lossP = lossP.detach().cpu().numpy()
+                _lossC1 = lossC1.detach().cpu().numpy()
+                _minTarget = mintarget.mean().detach().cpu().numpy()
+                _entropy = entropy.mean().detach().cpu().numpy()
+                _Reward = self._connect.get("Reward")
+                _Reward = loads(_Reward)
+                self.writer.add_scalar("Loss of Policy", _lossP, step)
+                self.writer.add_scalar("Loss of Critic", _lossC1, step)
+                self.writer.add_scalar("mean of Target", _minTarget, step)
+                self.writer.add_scalar("Entropy", _entropy, step)
+                self.writer.add_scalar("Reward", _Reward, step)
 
     def targetNetworkUpdate(self):
         with torch.no_grad():
@@ -221,12 +243,12 @@ class Learner:
 
             self.zeroGrad()
 
-            self.train(transitions)
+            self.train(transitions, t)
             self.targetNetworkUpdate()
             self._connect.set("params", dumps(self.state_dict()))
             self._connect.set("Count", dumps(t))
-            if (t + 1) % 100 == 0:
+            # if (t + 1) % 100 == 0:
                 
-                print("Step: {}".format(t))
+            #     print("Step: {}".format(t))
                 # gc.collect()
 

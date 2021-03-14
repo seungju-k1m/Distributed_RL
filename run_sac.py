@@ -21,4 +21,5 @@ config = SACConfig('./cfg/SAC.json')
 Networks = []
 for i in range(NUMSIM):
     Networks.append(sacPlayer.remote(config))
+Networks.append(Learner.remote(config))
 ray.get([Network.run.remote() for Network in Networks])

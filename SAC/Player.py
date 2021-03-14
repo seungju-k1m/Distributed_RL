@@ -10,11 +10,11 @@ from baseline.baseAgent import baseAgent
 from typing import Tuple
 
 
-@ray.remote(num_gpus=0.2)
+@ray.remote(num_gpus=0.1, memory=500*1024*1024, num_cpus=2)
 class sacPlayer:
     def __init__(self, config: SACConfig):
         self.config = config
-        self.device = torch.device(self.config.device)
+        self.device = torch.device(self.config.actorDevice)
         self.buildModel()
         self._connect = redis.StrictRedis(host=self.config.hostName)
         self._connect.delete("params")
@@ -116,7 +116,7 @@ class sacPlayer:
         return delta, prios
 
     def to(self):
-        device = torch.device(self.config.device)
+        device = torch.device(self.config.actorDevice)
         self.critic01.to(device)
         self.critic02.to(device)
         self.tCritic1.to(device)
@@ -145,7 +145,7 @@ class sacPlayer:
     def _pull_param(self):
         params = self._connect.get("params")
         count = self._connect.get("Count")
-        
+
         if params is not None:
             if count is not None:
                 count = _pickle.loads(count)
@@ -199,5 +199,6 @@ class sacPlayer:
                         episode, step, rewards / 50
                     )
                 )
+                self._connect.set("Reward", _pickle.dumps(rewards / 50))
                 rewards = 0
-                
+

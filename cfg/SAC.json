@@ -4,7 +4,7 @@
     "tau":0.005,
     "updateInterval":1000,
     "runStep":300e3,
-    "startStep":8e4,
+    "startStep":2e4,
     "actionSize":17,
     "fixedTemp":true,
     "tempValue":0.2,
@@ -12,14 +12,15 @@
     "beta0":0.4,
     "betaDecay":1000000,
 
-    "replayMemory":500e3,
-    "batchSize":2048,
+    "replayMemory":1000e3,
+    "batchSize":256,
     "rScaling":20,
     "sPath":"./save/SAC/",
-    "writeTMode":false,
+    "writeTMode":true,
     "tPath":"./tensorboard/SAC/Humanoid",
     "lPath":false,
-    "device":"cuda:0",
+    "leanerDevice":"cpu",
+    "actorDevice":"cpu",
     "hostName":"localhost",
 
     "optim":{
