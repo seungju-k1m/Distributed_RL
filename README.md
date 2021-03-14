@@ -2,7 +2,7 @@
 
 ## Description
 
-![](./docs/img/distributedRL_Str.jpeg)
+![](./docs/img/Distributed_image.jpeg)
 
 This Repo is for implementation of Distributed RL,
 
@@ -36,4 +36,8 @@ Here is list of Algorithm I implemented (or will implement)
     pip install -r requirements.txt
 
 
-then, if you use mujoco environment, you must install mujoco-py from this.
+ **[Important] if you use mujoco environment, you must install mujoco-py from this.**
+
+ ## Run
+
+    python run_sac.py
