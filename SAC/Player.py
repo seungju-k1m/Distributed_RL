@@ -36,10 +36,10 @@ class sacPlayer:
                 self.tCritic2 = baseAgent(data)
 
         if self.config.fixedTemp:
-            self.temperature = torch.zeros(1, requires_grad=True, device=self.device)
+            self.temperature = self.config.tempValue
         else:
-            self.temperature = self.config.temperature
-
+            self.temperature = torch.zeros(1, requires_grad=True, device=self.device)
+            
     def forward(self, state):
         state: torch.tensor
         output = self.actor.forward([state])[0]
@@ -156,8 +156,8 @@ class sacPlayer:
                 self.critic02.load_state_dict(params[2])
                 self.tCritic1.load_state_dict(params[3])
                 self.tCritic2.load_state_dict(params[4])
-                if self.config.fixedTemp:
-                    self.temperature = params[-1]
+                # if self.config.fixedTemp:
+                #     self.temperature = params[-1]
                 self.countModel = count
 
     def run(self):

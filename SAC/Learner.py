@@ -19,13 +19,14 @@ from torch.utils.tensorboard import SummaryWriter
 class Learner:
     def __init__(self, cfg: SACConfig):
         self.config = cfg
+        self.device = torch.device(self.config.leanerDevice)
         self.buildModel()
         self.genOptim()
         self._connect = redis.StrictRedis(host="localhost")
 
         self._memory = Replay(self.config, connect=self._connect)
         self._memory.start()
-        self.device = torch.device(self.config.leanerDevice)
+        # self.device = torch.device(self.config.leanerDevice)
         self.tMode = self.config.writeTMode
         self._connect.delete("sample")
         self._connect.delete("Reward")
@@ -215,6 +216,9 @@ class Learner:
                 self.writer.add_scalar("mean of Target", _minTarget, step)
                 self.writer.add_scalar("Entropy", _entropy, step)
                 self.writer.add_scalar("Reward", _Reward, step)
+                if self.config.fixedTemp is False:
+                    _Temperature = self.temperature.exp().detach().cpu().numpy()
+                    self.writer.add_scalar("Temperature", _Temperature, step)
 
     def targetNetworkUpdate(self):
         with torch.no_grad():

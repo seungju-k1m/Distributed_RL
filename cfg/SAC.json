@@ -6,7 +6,7 @@
     "runStep":300e3,
     "startStep":2e4,
     "actionSize":17,
-    "fixedTemp":true,
+    "fixedTemp":false,
     "tempValue":0.2,
     "alpha":0.6,
     "beta0":0.4,
