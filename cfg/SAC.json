@@ -4,7 +4,7 @@
     "tau":0.005,
     "updateInterval":1000,
     "runStep":300e3,
-    "startStep":2e4,
+    "startStep":4e4,
     "actionSize":17,
     "fixedTemp":false,
     "tempValue":0.2,
@@ -27,12 +27,14 @@
         "actor":{
             "name":"adam",
             "lr":3e-4,
-            "eps":1e-7
+            "eps":1e-7,
+            "decay":1e-5
         },
         "critic":{
             "name":"adam",
             "lr":3e-4,
-            "eps":1e-7
+            "eps":1e-7,
+            "decay":1e-5
         },
         "temperature":{
             "name":"adam",

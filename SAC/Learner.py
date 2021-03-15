@@ -48,9 +48,7 @@ class Learner:
             self.temperature = self.config.tempValue
 
         else:
-            self.temperature = torch.zeros(
-                1, requires_grad=True, device=self.device
-            )
+            self.temperature = torch.zeros(1, requires_grad=True, device=self.device)
 
     def to(self):
         self.actor.to(self.device)
@@ -77,6 +75,8 @@ class Learner:
         self.aOptim.zero_grad()
         self.cOptim01.zero_grad()
         self.cOptim02.zero_grad()
+        if self.config.fixedTemp is False:
+            self.tOptim.zero_grad()
 
     def forward(self, state):
         state: torch.tensor
@@ -94,10 +94,13 @@ class Learner:
         log_prob = normal.log_prob(x_t).sum(1, keepdim=True)
         log_prob -= torch.log(1 - action.pow(2) + 1e-6).sum(1, keepdim=True)
         entropy = (torch.log(std * (2 * 3.14) ** 0.5) + 0.5).sum(1, keepdim=True)
+        # logProb = gaussianDist.log_prob(x_t).sum(1, keepdim=True)
+        # logProb -= torch.log(1-action.pow(2)+1e-6).sum(1, keepdim=True)
+        # entropy = (torch.log(std * (2 * 3.14)**0.5)+0.5).sum(1, keepdim=True)
 
         concat = torch.cat((state, action), dim=1)
-        critic01 = self.critic01.forward([concat])
-        critic02 = self.critic02.forward([concat])
+        critic01 = self.critic01.forward([concat])[0]
+        critic02 = self.critic02.forward([concat])[0]
 
         return action, log_prob, (critic01, critic02), entropy
 
@@ -116,14 +119,14 @@ class Learner:
         lossCritic2 = torch.mean((critic02 - target).pow(2) / 2)
 
         return lossCritic1, lossCritic2
-    
+
     def calculateActor(self, state):
 
         # 2. Calculate the loss of Actor
         actor_state = state.clone().detach()
 
         action, logProb, critics, entropy = self.forward(actor_state)
-        c1, c2 = critics[0][0], critics[1][0]
+        c1, c2 = critics[0], critics[1]
         Actor_critic = torch.min(c1, c2)
 
         if self.config.fixedTemp:
@@ -138,7 +141,7 @@ class Learner:
 
         else:
             lossTemp = torch.mean(
-                self.temperature.exp() * (-detachedLogProb + self.config.actionSize)
+                self.temperature.exp() * (-detachedLogProb + self.config.actionSize * 2)
             )
             return lossPolicy, lossTemp, entropy
 
@@ -179,7 +182,7 @@ class Learner:
             if self.config.fixedTemp:
                 temp = -self.temperature * logProbBatch
             else:
-                temp = -self.temperature.exp() * logProbBatch
+                temp = -self.temperature.exp().detach() * logProbBatch
 
             mintarget = reward + (mintarget + temp) * self.config.gamma * done
 
@@ -190,19 +193,20 @@ class Learner:
         lossC2.backward()
         self.cOptim01.step()
         self.cOptim02.step()
+        self.zeroGrad()
 
         if self.config.fixedTemp:
             lossP, entropy = self.calculateActor(stateBatch)
             lossP.backward()
             self.aOptim.step()
-        
+
         else:
             lossP, lossT, entropy = self.calculateActor(stateBatch)
             lossP.backward()
             lossT.backward()
             self.aOptim.step()
             self.tOptim.step()
-        
+
         if self.tMode:
             with torch.no_grad():
                 _lossP = lossP.detach().cpu().numpy()
@@ -252,7 +256,7 @@ class Learner:
             self._connect.set("params", dumps(self.state_dict()))
             self._connect.set("Count", dumps(t))
             # if (t + 1) % 100 == 0:
-                
+
             #     print("Step: {}".format(t))
-                # gc.collect()
+            # gc.collect()
 
