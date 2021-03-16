@@ -5,11 +5,11 @@ from SAC.Player import sacPlayer
 from SAC.Learner import Learner
 from SAC.Config import SACConfig
 
-NUMSIM = 4
+NUMSIM = 6
 
 
 ray.init(
-    num_cpus=12,
+    num_cpus=16,
     num_gpus=1
 )
 
