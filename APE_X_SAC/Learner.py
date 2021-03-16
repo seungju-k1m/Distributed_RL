@@ -1,4 +1,5 @@
 import gc
+import sys
 import time
 import ray
 import redis
@@ -15,7 +16,7 @@ from baseline.baseAgent import baseAgent
 from torch.utils.tensorboard import SummaryWriter
 
 
-@ray.remote(num_gpus=0.25, num_cpus=4)
+@ray.remote(num_gpus=0.25, num_cpus=1)
 class APEXLearner:
     def __init__(self, cfg: SACConfig):
         self.config = cfg
@@ -30,7 +31,11 @@ class APEXLearner:
         self.tMode = self.config.writeTMode
         self._connect.delete("sample")
         self._connect.delete("Reward")
+        self._connect.delete("params")
+        self._connect.delete("Count")
         self.to()
+        self.beta0 = self.config.beta0
+        self.betaDecay = self.config.betaDecay
         if self.tMode:
             self.writer = SummaryWriter(self.config.tPath)
 
@@ -110,17 +115,17 @@ class APEXLearner:
                 break
             time.sleep(0.1)
 
-    def calculateQ(self, state, target, action):
+    def calculateQ(self, state, target, action, weights):
         stateAction = torch.cat((state, action), dim=1).detach()
         critic01 = self.critic01.forward(tuple([stateAction]))[0]
         critic02 = self.critic02.forward(tuple([stateAction]))[0]
 
-        lossCritic1 = torch.mean((critic01 - target).pow(2) / 2)
-        lossCritic2 = torch.mean((critic02 - target).pow(2) / 2)
+        lossCritic1 = torch.mean((critic01 - target).pow(2) * weights / 2)
+        lossCritic2 = torch.mean((critic02 - target).pow(2) * weights / 2)
 
         return lossCritic1, lossCritic2
 
-    def calculateActor(self, state):
+    def calculateActor(self, state, weights):
 
         # 2. Calculate the loss of Actor
         actor_state = state.clone().detach()
@@ -134,18 +139,20 @@ class APEXLearner:
         else:
             tempDetached = self.temperature.exp().detach()
 
-        lossPolicy = torch.mean((tempDetached * logProb - Actor_critic))
+        lossPolicy = torch.mean((tempDetached * logProb - Actor_critic) * weights)
         detachedLogProb = logProb.detach()
         if self.config.fixedTemp:
             return lossPolicy, entropy
 
         else:
             lossTemp = torch.mean(
-                self.temperature.exp() * (-detachedLogProb + self.config.actionSize * 2)
+                self.temperature.exp()
+                * (-detachedLogProb + self.config.actionSize * 2)
+                * weights
             )
             return lossPolicy, lossTemp, entropy
 
-    def train(self, transition, step):
+    def train(self, transition, step, weights):
         state, action, reward, next_state, done = [], [], [], [], []
 
         with torch.no_grad():
@@ -174,6 +181,21 @@ class APEXLearner:
 
             mintarget = torch.min(tCritic1, tCritic2)
 
+            state_action = torch.cat((stateBatch, actionBatch), dim=1)
+            Q1 = self.critic01.forward([state_action])[0]
+            Q2 = self.critic02.forward([state_action])[0]
+            delta = torch.nn.functional.smooth_l1_loss(
+                torch.min(Q1, Q2), mintarget, reduce=False
+            )
+            prios = (
+                (delta.abs() + 1e-5)
+                .pow(self.config.alpha)
+                .view(-1)
+                .cpu()
+                .numpy()
+                .tolist()
+            )
+
             done = torch.tensor(done).float()
             done -= 1
             done *= -1
@@ -185,10 +207,11 @@ class APEXLearner:
                 temp = -self.temperature.exp().detach() * logProbBatch
 
             mintarget = reward + (mintarget + temp) * self.config.gamma * done
+            weights = torch.tensor(weights).float().to(self.device).view(-1, 1)
 
         self.zeroGrad()
 
-        lossC1, lossC2 = self.calculateQ(stateBatch, mintarget, actionBatch)
+        lossC1, lossC2 = self.calculateQ(stateBatch, mintarget, actionBatch, weights)
         lossC1.backward()
         lossC2.backward()
         self.cOptim01.step()
@@ -196,12 +219,12 @@ class APEXLearner:
         self.zeroGrad()
 
         if self.config.fixedTemp:
-            lossP, entropy = self.calculateActor(stateBatch)
+            lossP, entropy = self.calculateActor(stateBatch, weights)
             lossP.backward()
             self.aOptim.step()
 
         else:
-            lossP, lossT, entropy = self.calculateActor(stateBatch)
+            lossP, lossT, entropy = self.calculateActor(stateBatch, weights)
             lossP.backward()
             lossT.backward()
             self.aOptim.step()
@@ -214,15 +237,18 @@ class APEXLearner:
                 _minTarget = mintarget.mean().detach().cpu().numpy()
                 _entropy = entropy.mean().detach().cpu().numpy()
                 _Reward = self._connect.get("Reward")
-                _Reward = loads(_Reward)
+                if _Reward is not None:
+                    _Reward = loads(_Reward)
+                    self.writer.add_scalar("Reward", _Reward, step)
                 self.writer.add_scalar("Loss of Policy", _lossP, step)
                 self.writer.add_scalar("Loss of Critic", _lossC1, step)
                 self.writer.add_scalar("mean of Target", _minTarget, step)
                 self.writer.add_scalar("Entropy", _entropy, step)
-                self.writer.add_scalar("Reward", _Reward, step)
+                
                 if self.config.fixedTemp is False:
                     _Temperature = self.temperature.exp().detach().cpu().numpy()
                     self.writer.add_scalar("Temperature", _Temperature, step)
+        return prios
 
     def targetNetworkUpdate(self):
         with torch.no_grad():
@@ -247,16 +273,19 @@ class APEXLearner:
         BATCHSIZE = self.config.batchSize
 
         for t in count():
-            transitions = self._memory.sample(BATCHSIZE)
-
+            transitions, prios, indices = self._memory.sample(BATCHSIZE)
+            total = len(self._memory)
+            beta = min(1.0, self.beta0 + (1 - self.beta0) / self.betaDecay * t)
+            weights = (total * np.array(prios) / self._memory.total_prios) ** (-beta)
+            weights /= weights.max()
             self.zeroGrad()
 
-            self.train(transitions, t)
-            self.targetNetworkUpdate()
-            self._connect.set("params", dumps(self.state_dict()))
-            self._connect.set("Count", dumps(t))
-            # if (t + 1) % 100 == 0:
+            prior = self.train(transitions, t, weights)
+            self._memory.update_priorities(indices, prior)
 
-            #     print("Step: {}".format(t))
-            # gc.collect()
-
+            if (t + 1) % self.config.updateInterval == 0:
+                self.targetNetworkUpdate()
+                self._connect.set("params", dumps(self.state_dict()))
+                self._connect.set("Count", dumps(t))
+                size = sys.getsizeof(self._memory)
+                print(size)

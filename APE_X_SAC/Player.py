@@ -9,7 +9,7 @@ from APE_X_SAC.Config import SACConfig
 from baseline.baseAgent import baseAgent
 
 
-@ray.remote(num_gpus=0.1, memory=500*1024*1024, num_cpus=2)
+@ray.remote(num_gpus=0.1, memory=500*1024*1024, num_cpus=1)
 class APEXsacPlayer:
     def __init__(self, config: SACConfig):
         self.config = config
@@ -18,6 +18,8 @@ class APEXsacPlayer:
         self._connect = redis.StrictRedis(host=self.config.hostName)
         self._connect.delete("params")
         self._connect.delete("Count")
+        self._connect.delete("sample")
+        self._connect.delete("Reward")
         # self.device = torch.device("")
         # torch.cuda.set_device(0)
         self.env = gym.make(self.config.envName)
@@ -86,7 +88,7 @@ class APEXsacPlayer:
             tCritic1 = self.tCritic1.forward([next_state_action])[0]
             tCritic2 = self.tCritic2.forward([next_state_action])[0]
 
-            done = torch.tensor(done).float().to(self.device).view(1, -1)
+            done = torch.tensor(done).float().to(self.device).view(-1, 1)
 
             if self.config.fixedTemp:
                 temp = -self.temperature * logProbBatch
@@ -187,7 +189,8 @@ class APEXsacPlayer:
                 rewards += reward
                 if len(self.localbuffer) > self.config.batchSize:
                     prior = self.calc_priorities(self.localbuffer)
-                    self._connect("sample", _pickle.dumps((self.localbuffer, prior)))
+                    x = self.localbuffer.copy()
+                    self._connect.rpush("sample", _pickle.dumps((x, prior)))
                     self.localbuffer = []
                 if step % self.config.updateInterval == 0:
                     self._pull_param()
