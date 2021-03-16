@@ -35,7 +35,7 @@ class Replay(threading.Thread):
                     with self._lock:
                         self._memory.push(dd, prior)
             time.sleep(0.01)
-            if (t % 10) == 0:
+            if (t % 100) == 0:
                 gc.collect()
 
     def sample(self, batch_size):

@@ -7,10 +7,9 @@ import _pickle
 import numpy as np
 from SAC.Config import SACConfig
 from baseline.baseAgent import baseAgent
-from typing import Tuple
 
 
-@ray.remote(num_gpus=0.1, memory=500*1024*1024, num_cpus=2)
+@ray.remote(num_gpus=0.1, memory=500*1024*1024, num_cpus=1)
 class sacPlayer:
     def __init__(self, config: SACConfig):
         self.config = config
@@ -36,10 +35,10 @@ class sacPlayer:
                 self.tCritic2 = baseAgent(data)
 
         if self.config.fixedTemp:
-            self.temperature = self.config.tempValue
-        else:
             self.temperature = torch.zeros(1, requires_grad=True, device=self.device)
-            
+        else:
+            self.temperature = self.config.temperature
+
     def forward(self, state):
         state: torch.tensor
         output = self.actor.forward([state])[0]
@@ -156,8 +155,8 @@ class sacPlayer:
                 self.critic02.load_state_dict(params[2])
                 self.tCritic1.load_state_dict(params[3])
                 self.tCritic2.load_state_dict(params[4])
-                # if self.config.fixedTemp:
-                #     self.temperature = params[-1]
+                if self.config.fixedTemp:
+                    self.temperature = params[-1]
                 self.countModel = count
 
     def run(self):
@@ -201,4 +200,3 @@ class sacPlayer:
                 )
                 self._connect.set("Reward", _pickle.dumps(rewards / 50))
                 rewards = 0
-

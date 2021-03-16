@@ -1,5 +1,4 @@
 import gc
-import sys
 import time
 import ray
 import redis
@@ -16,7 +15,7 @@ from baseline.baseAgent import baseAgent
 from torch.utils.tensorboard import SummaryWriter
 
 
-@ray.remote(num_gpus=0.25, num_cpus=1)
+# @ray.remote(num_gpus=0.25, num_cpus=1)
 class APEXLearner:
     def __init__(self, cfg: SACConfig):
         self.config = cfg
@@ -188,7 +187,7 @@ class APEXLearner:
                 torch.min(Q1, Q2), mintarget, reduce=False
             )
             prios = (
-                (delta.abs() + 1e-5)
+                (delta.abs().clone() + 1e-5)
                 .pow(self.config.alpha)
                 .view(-1)
                 .cpu()
@@ -244,7 +243,7 @@ class APEXLearner:
                 self.writer.add_scalar("Loss of Critic", _lossC1, step)
                 self.writer.add_scalar("mean of Target", _minTarget, step)
                 self.writer.add_scalar("Entropy", _entropy, step)
-                
+
                 if self.config.fixedTemp is False:
                     _Temperature = self.temperature.exp().detach().cpu().numpy()
                     self.writer.add_scalar("Temperature", _Temperature, step)
@@ -273,19 +272,21 @@ class APEXLearner:
         BATCHSIZE = self.config.batchSize
 
         for t in count():
+
             transitions, prios, indices = self._memory.sample(BATCHSIZE)
+
             total = len(self._memory)
             beta = min(1.0, self.beta0 + (1 - self.beta0) / self.betaDecay * t)
             weights = (total * np.array(prios) / self._memory.total_prios) ** (-beta)
             weights /= weights.max()
             self.zeroGrad()
 
-            prior = self.train(transitions, t, weights)
+            prior = self.train(transitions.copy(), t, weights)
             self._memory.update_priorities(indices, prior)
+            self._memory.remove_to_fit()
 
             if (t + 1) % self.config.updateInterval == 0:
                 self.targetNetworkUpdate()
                 self._connect.set("params", dumps(self.state_dict()))
                 self._connect.set("Count", dumps(t))
-                size = sys.getsizeof(self._memory)
-                print(size)
+                gc.collect()

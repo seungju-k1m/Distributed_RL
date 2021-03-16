@@ -1,5 +1,6 @@
 import gc
 import ray
+import random
 import gym
 import redis
 import torch
@@ -7,9 +8,10 @@ import _pickle
 import numpy as np
 from APE_X_SAC.Config import SACConfig
 from baseline.baseAgent import baseAgent
+from collections import deque
 
 
-@ray.remote(num_gpus=0.1, memory=500*1024*1024, num_cpus=1)
+# @ray.remote(num_gpus=0.1, memory=500*1024*1024, num_cpus=1)
 class APEXsacPlayer:
     def __init__(self, config: SACConfig):
         self.config = config
@@ -25,7 +27,7 @@ class APEXsacPlayer:
         self.env = gym.make(self.config.envName)
         self.to()
         self.countModel = -1
-        self.localbuffer = []
+        self.localbuffer = deque(maxlen=self.config.batchSize)
 
     def buildModel(self):
         for netName, data in self.config.agent.items():
@@ -183,15 +185,15 @@ class APEXsacPlayer:
                 self.localbuffer.append(sample)
                 # self._connect.rpush("sample", _pickle.dumps(sample))
 
-                state = nextState
+                state = nextState.copy()
                 self.env.render()
                 action = self.getAction(state)
                 rewards += reward
-                if len(self.localbuffer) > self.config.batchSize:
-                    prior = self.calc_priorities(self.localbuffer)
-                    x = self.localbuffer.copy()
+                if len(self.localbuffer) == self.config.batchSize:
+                    x = random.sample(self.localbuffer, self.config.batchSize)
+                    prior = self.calc_priorities(x)
                     self._connect.rpush("sample", _pickle.dumps((x, prior)))
-                    self.localbuffer = []
+                    self.localbuffer.clear()
                 if step % self.config.updateInterval == 0:
                     self._pull_param()
             gc.collect()
