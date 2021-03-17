@@ -4,6 +4,6 @@
 from SAC.Player import sacPlayer
 from SAC.Config import SACConfig
 
-config = SACConfig("./cfg/APEXSAC.json")
+config = SACConfig("./cfg/SAC.json")
 player = sacPlayer(config)
 player.run()
