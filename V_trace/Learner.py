@@ -6,9 +6,8 @@ import torch
 
 import numpy as np
 
-from typing import Tuple
 from itertools import count
-from SAC.ReplayMemory import Replay
+from V_trace.ReplayMemory import Replay
 from SAC.Config import SACConfig
 from baseline.utils import getOptim, dumps, loads
 from baseline.baseAgent import baseAgent

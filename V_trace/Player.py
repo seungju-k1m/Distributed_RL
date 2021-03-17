@@ -5,21 +5,19 @@ import redis
 import torch
 import _pickle
 import numpy as np
-from SAC.Config import SACConfig
+from V_trace.Config import VTraceConfig
 from baseline.baseAgent import baseAgent
 
 
 @ray.remote(num_gpus=0.05, memory=500 * 1024 * 1024, num_cpus=1)
-class sacPlayer:
-    def __init__(self, config: SACConfig):
+class VTraceactor:
+    def __init__(self, config: VTraceConfig):
         self.config = config
         self.device = torch.device(self.config.actorDevice)
         self.buildModel()
         self._connect = redis.StrictRedis(host=self.config.hostName)
         self._connect.delete("params")
         self._connect.delete("Count")
-        # self.device = torch.device("")
-        # torch.cuda.set_device(0)
         self.env = gym.make(self.config.envName)
         self.env.seed(np.random.randint(1, 1000))
         self.to()
@@ -27,18 +25,8 @@ class sacPlayer:
 
     def buildModel(self):
         for netName, data in self.config.agent.items():
-            if netName == "actor":
-                self.actor = baseAgent(data)
-            elif netName == "critic":
-                self.critic01 = baseAgent(data)
-                self.tCritic1 = baseAgent(data)
-                self.critic02 = baseAgent(data)
-                self.tCritic2 = baseAgent(data)
-
-        if self.config.fixedTemp:
-            self.temperature = self.config.tempValue
-        else:
-            self.temperature = torch.zeros(1, requires_grad=True, device=self.device)
+            if netName == "actor-critic":
+                self.model = baseAgent(data)
 
     def forward(self, state):
         state: torch.tensor
