@@ -114,8 +114,8 @@ class Learner:
         critic01 = self.critic01.forward(tuple([stateAction]))[0]
         critic02 = self.critic02.forward(tuple([stateAction]))[0]
 
-        lossCritic1 = torch.mean((critic01 - target).pow(2) / 2)
-        lossCritic2 = torch.mean((critic02 - target).pow(2) / 2)
+        lossCritic1 = torch.mean((critic01 - target[0]).pow(2) / 2)
+        lossCritic2 = torch.mean((critic02 - target[0]).pow(2) / 2)
 
         return lossCritic1, lossCritic2
     
@@ -171,8 +171,6 @@ class Learner:
             tCritic1 = self.tCritic01.forward([next_state_action])[0]
             tCritic2 = self.tCritic02.forward([next_state_action])[0]
 
-            mintarget = torch.min(tCritic1, tCritic2)
-
             done = torch.tensor(done).float()
             done -= 1
             done *= -1
@@ -183,11 +181,12 @@ class Learner:
             else:
                 temp = -self.temperature.exp() * logProbBatch
 
-            mintarget = reward + (mintarget + temp) * self.config.gamma * done
+            tCritic1 = reward + (tCritic1 + temp) * self.config.gamma * done
+            tCritic2 = reward + (tCritic2 + temp) * self.config.gamma * done
 
         self.zeroGrad()
 
-        lossC1, lossC2 = self.calculateQ(stateBatch, mintarget, actionBatch)
+        lossC1, lossC2 = self.calculateQ(stateBatch, (tCritic1, tCritic2), actionBatch)
         lossC1.backward()
         lossC2.backward()
         self.cOptim01.step()
@@ -209,13 +208,11 @@ class Learner:
             with torch.no_grad():
                 _lossP = lossP.detach().cpu().numpy()
                 _lossC1 = lossC1.detach().cpu().numpy()
-                _minTarget = mintarget.mean().detach().cpu().numpy()
                 _entropy = entropy.mean().detach().cpu().numpy()
                 _Reward = self._connect.get("Reward")
                 _Reward = loads(_Reward)
                 self.writer.add_scalar("Loss of Policy", _lossP, step)
                 self.writer.add_scalar("Loss of Critic", _lossC1, step)
-                self.writer.add_scalar("mean of Target", _minTarget, step)
                 self.writer.add_scalar("Entropy", _entropy, step)
                 self.writer.add_scalar("Reward", _Reward, step)
                 if self.config.fixedTemp is False:

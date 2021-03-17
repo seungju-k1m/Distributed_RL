@@ -7,6 +7,8 @@ import _pickle
 import numpy as np
 from V_trace.Config import VTraceConfig
 from baseline.baseAgent import baseAgent
+from collections import deque
+from itertools import count
 
 
 @ray.remote(num_gpus=0.05, memory=500 * 1024 * 1024, num_cpus=1)
@@ -22,6 +24,8 @@ class VTraceactor:
         self.env.seed(np.random.randint(1, 1000))
         self.to()
         self.countModel = -1
+        self.obsDeque = deque(self.config.stack)
+        self.localbuffer = deque(self.config.unroll_step)
 
     def buildModel(self):
         for netName, data in self.config.agent.items():
@@ -31,7 +35,7 @@ class VTraceactor:
     def forward(self, state):
         state: torch.tensor
         output = self.model.forward([state])[0]
-        logit_policy = output[:,:self.config.actionSize]
+        logit_policy = output[:, : self.config.actionSize]
         exp_policy = torch.exp(logit_policy)
         policy = exp_policy / exp_policy.sum(dim=1)
         dist = torch.distributions.categorical.Categorical(probs=policy)
@@ -50,7 +54,7 @@ class VTraceactor:
             state = torch.tensor(state).float().to(self.device)
             policy, __, action = self.forward(state)
 
-        return action.detach().cpu().numpy()[0], policy
+        return action.detach().cpu().numpy()[0], policy.detach().cpu().numpy()[0]
 
     def _pull_param(self):
         params = self._connect.get("params")
@@ -64,25 +68,36 @@ class VTraceactor:
                 self.model.load_state_dict(params)
                 self.countModel = count
 
+    def stackObs(self, obs):
+        self.obsDeque.append(obs)
+        state = []
+        for i in range(self.config.stack):
+            state.append(self.obsDeque.index(i + 1))
+        state = np.concatenate(state, axis=-1)
+        return state
+
     def run(self):
         rewards = 0
         step = 1
         episode = 1
 
-        while 1:
-            state = self.env.reset()
-            action = self.getAction(state)
+        for t in count():
+            obs = self.env.reset()
+            state = self.stackObs(obs)
+            action, policy = self.getAction(state)
             done = False
             while done is False:
-                nextState, reward, done, _ = self.env.step(action)
+                nextobs, reward, done, _ = self.env.step(action)
+                nextState = self.stackObs(nextobs)
                 step += 1
                 sample = (
                     state.copy(),
                     action.copy(),
-                    reward * self.config.rScaling,
-                    nextState.copy(),
+                    reward,
+                    policy.copy(),
                     done,
                 )
+                self.localbuffer.append(sample) 
                 self._connect.rpush("sample", _pickle.dumps(sample))
 
                 state = nextState

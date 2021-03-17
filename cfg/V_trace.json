@@ -4,14 +4,18 @@
     "replayMemory":200000,
     "batchSize":32,
     "RewardClipping":[-1, 1],
+    "grayscale":true,
     "gamma":0.99,
     "EntropyRegularizer":0.01,
     "clipingGradientNorm":40,
     "stack":4,
+    "actionSize":4,
+    "stateSize":[4, 84, 84],
+    "unroll_step":20,
 
     "sPath":"./save/V_Trace/",
     "writeTMode":false,
-    "tPath":"./tensorboard/V_Trace/Humanoid",
+    "tPath":"./tensorboard/V_Trace/BreakOut-v0",
     "lPath":false,
     "leanerDevice":"cuda:0",
     "actorDevice":"cuda:0",
@@ -30,7 +34,7 @@
         "actor-critic":{
             "module00":{
                 "netCat":"CNN2D",
-                "iSize":3,
+                "iSize":4,
                 "nLayer":3,
                 "fSize":[8, 4, -1],
                 "nUnit":[16, 32],
@@ -41,20 +45,6 @@
                 "linear":true,
                 "input":[0],
                 "prior":0
-            },
-            "module01":{
-                "netCat":"MLP",
-                "iSize":100,
-                "nLayer":1,
-                "fSize":[256],
-                "act":["relu"],
-                "BN":false,
-                "prevNodeNames":["module00"],
-                "prior":1
-            },
-            "module02":{
-                "netCat":"Cat",
-                "input":[1, 2]
             }
         }
     }
