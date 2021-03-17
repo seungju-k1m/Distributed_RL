@@ -14,7 +14,6 @@ class Replay(threading.Thread):
         # main thread가 종료되면 그 즉시 종료되는 thread이다.
         self.setDaemon(True)
 
-        # self._memory = PrioritizedMemory(int(config.replayMemory))
         self._memory = ReplayMemory(int(config.replayMemory))
 
         self._connect = connect

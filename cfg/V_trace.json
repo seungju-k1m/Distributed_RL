@@ -1,0 +1,61 @@
+{
+    "envName":"Breakout-v0",
+
+    "replayMemory":200000,
+    "batchSize":32,
+    "RewardClipping":[-1, 1],
+    "gamma":0.99,
+    "EntropyRegularizer":0.01,
+    "clipingGradientNorm":40,
+    "stack":4,
+
+    "sPath":"./save/V_Trace/",
+    "writeTMode":false,
+    "tPath":"./tensorboard/V_Trace/Humanoid",
+    "lPath":false,
+    "leanerDevice":"cuda:0",
+    "actorDevice":"cuda:0",
+    "hostName":"localhost",
+
+    "optim":{
+        "actor-critic":{
+            "name":"rmsprop",
+            "lr":0.0006,
+            "momentum":0,
+            "epsilon":0.01
+        }
+
+    },
+    "agent":{
+        "actor-critic":{
+            "module00":{
+                "netCat":"CNN2D",
+                "iSize":3,
+                "nLayer":3,
+                "fSize":[8, 4, -1],
+                "nUnit":[16, 32],
+                "padding":[0, 0],
+                "stride":[4, 2],
+                "act":["relu", "relu"],
+                "BN":[false, false, false],
+                "linear":true,
+                "input":[0],
+                "prior":0
+            },
+            "module01":{
+                "netCat":"MLP",
+                "iSize":100,
+                "nLayer":1,
+                "fSize":[256],
+                "act":["relu"],
+                "BN":false,
+                "prevNodeNames":["module00"],
+                "prior":1
+            },
+            "module02":{
+                "netCat":"Cat",
+                "input":[1, 2]
+            }
+        }
+    }
+}

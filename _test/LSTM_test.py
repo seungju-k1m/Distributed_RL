@@ -43,5 +43,6 @@ _input = torch.rand((1, 1, 256)).float()
 def test_LSTM():
     agent = baseAgent(netData)
     shc = (_input, (hx, nx))
+    s = (_input)
     _output = agent.forward(shc)
     print(_output[0], _output[1])
