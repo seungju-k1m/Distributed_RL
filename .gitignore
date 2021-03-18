@@ -4,3 +4,4 @@ tensorboard/*
 save/*
 .DS_Store
 __test
+test.py

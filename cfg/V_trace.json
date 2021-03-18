@@ -48,7 +48,7 @@
             },
             "module01":{
                 "netCat":"MLP",
-                "iSize":3072,
+                "iSize":2592,
                 "nLayer":1,
                 "fSize":[256],
                 "act":["relu"],

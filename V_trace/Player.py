@@ -1,4 +1,5 @@
 import gc
+
 import ray
 import gym
 import time
@@ -11,19 +12,24 @@ from baseline.baseAgent import baseAgent
 from collections import deque
 from itertools import count
 from copy import deepcopy
+from PIL import Image as im
 
 
-def rgb_to_gray(img):
-    R = np.array(img[:, :, 0])
-    G = np.array(img[:, :, 1])
-    B = np.array(img[:, :, 2])
+def rgb_to_gray(img, W=84, H=84):
+    R = np.array(img[:, :, 0]/255, dtype=np.float32)
+    G = np.array(img[:, :, 1]/255, dtype=np.float32)
+    B = np.array(img[:, :, 2]/255, dtype=np.float32)
 
     R = R * 0.299
     G = G * 0.587
     B = B * 0.114
 
-    Avg = R + G + B
-    grayImage = np.expand_dims(Avg, -1)
+    grayImage = R + G + B
+    # grayImage = np.expand_dims(Avg, -1)
+    grayImage = im.fromarray(grayImage, mode='F')
+
+    grayImage = grayImage.resize((W, H))
+    grayImage = np.expand_dims(np.array(grayImage), 0)
 
     return grayImage
 
@@ -42,12 +48,15 @@ class VTraceactor:
         self.env.seed(np.random.randint(1, 1000))
         self.to()
         self.countModel = -1
-        self.obsDeque = deque(self.config.stack)
+        self.obsDeque = deque(maxlen=self.config.stack)
         self.resetObsDeque()
         self.localbuffer = []
-    
+
     def resetObsDeque(self):
-        pass
+        W = self.config.stateSize[-1]
+        H = self.config.stateSize[-2]
+        for i in range(self.config.stack):
+            self.obsDeque.append(np.zeros((1, H, W)))
 
     def buildModel(self):
         for netName, data in self.config.agent.items():
@@ -73,7 +82,10 @@ class VTraceactor:
     def getAction(self, state: np.array, initMode=False) -> np.array:
 
         with torch.no_grad():
+            if state.ndim == 3:
+                state = np.expand_dims(state, 0)
             state = torch.tensor(state).float().to(self.device)
+            
             policy, __, action = self.forward(state)
         action = action.detach().cpu().numpy()[0]
         policy = policy.detach().cpu().numpy()[0]
@@ -100,8 +112,8 @@ class VTraceactor:
         self.obsDeque.append(grayObs)
         state = []
         for i in range(self.config.stack):
-            state.append(self.obsDeque.index(i + 1))
-        state = np.concatenate(state, axis=-1)
+            state.append(self.obsDeque[i])
+        state = np.concatenate(state, axis=0)
         return state
 
     def run(self):
@@ -110,15 +122,17 @@ class VTraceactor:
         episode = 1
 
         for t in count():
+            self.resetObsDeque()
             obs = self.env.reset()
             state = self.stackObs(obs)
             action, policy, cellstate = self.getAction(state)
             done = False
             n = 0
-            self.localbuffer.append(deepcopy(cellstate))
-            self.localbuffer.append(state.copy())
-            self.localbuffer.append(action.copy())
-            self.localbuffer.append(policy.copy())
+            if self.trainMode:
+                self.localbuffer.append(deepcopy(cellstate))
+                self.localbuffer.append(state.copy())
+                self.localbuffer.append(action.copy())
+                self.localbuffer.append(policy.copy())
             while done is False:
                 nextobs, reward, done, _ = self.env.step(action)
                 nextState = self.stackObs(nextobs)
@@ -128,13 +142,17 @@ class VTraceactor:
                     action, policy, cellstate = self.getAction(nextState, initMode=True)
                 else:
                     action, policy = self.getAction(nextState)
-
+                if self.trainMode:
+                    self.localbuffer.append(reward)
+                    self.localbuffer.append(nextState.copy())
+                    self.localbuffer.append(action.copy())
+                    self.localbuffer.append(policy.copy())
                 self.env.render()
                 if self.trainMode is False:
                     time.sleep(0.01)
                 rewards += reward
 
-                if n == self.config.unroll_step | done:
+                if (n == self.config.unroll_step | done) and self.trainMode:
                     self._connect.rpush("trajectory", _pickle.dumps(self.localbuffer))
                     self.localbuffer = []
                     self._pull_param()
