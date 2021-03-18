@@ -70,7 +70,7 @@ class VTraceactor:
         exp_policy = torch.exp(logit_policy)
         policy = exp_policy / exp_policy.sum(dim=1)
         dist = torch.distributions.categorical.Categorical(probs=policy)
-        action = dist.rsample()
+        action = dist.sample()
         value = output[:, -1:]
 
         return policy, value, action
@@ -81,16 +81,17 @@ class VTraceactor:
 
     def getAction(self, state: np.array, initMode=False) -> np.array:
 
+        if initMode:
+            cellstate = self.model.getCellState()
         with torch.no_grad():
             if state.ndim == 3:
                 state = np.expand_dims(state, 0)
             state = torch.tensor(state).float().to(self.device)
             
             policy, __, action = self.forward(state)
-        action = action.detach().cpu().numpy()[0]
+        action = action.detach().cpu().numpy()
         policy = policy.detach().cpu().numpy()[0]
         if initMode:
-            cellstate = self.model.getCellState()
             return action, policy, cellstate
         else:
             return action, policy
@@ -125,7 +126,7 @@ class VTraceactor:
             self.resetObsDeque()
             obs = self.env.reset()
             state = self.stackObs(obs)
-            action, policy, cellstate = self.getAction(state)
+            action, policy, cellstate = self.getAction(state, initMode=True)
             done = False
             n = 0
             if self.trainMode:
