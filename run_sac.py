@@ -45,7 +45,7 @@ parser.add_argument(
     "--num-gpu",
     type=int,
     default=1,
-    help="specify the number of gpu for ray"
+    help="specify the number of gpu for ray. default is 1"
 )
 
 parser.add_argument(
