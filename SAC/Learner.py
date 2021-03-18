@@ -29,8 +29,10 @@ class Learner:
         self._memory.start()
         
         self.tMode = self.config.writeTMode
-        self._connect.delete("sample")
-        self._connect.delete("Reward")
+        # self._connect.delete("sample")
+        # self._connect.delete("Reward")
+        for key in self._connect.scan_iter():
+            self._connect.delete(key)
         self.to()
         if self.tMode:
             self.writer = SummaryWriter(self.config.tPath)
@@ -267,11 +269,11 @@ class Learner:
             if (t + 1) % 1000 == 0:
                 
                 gc.collect()
-                torch.save(
-                    {
-                        "actor": self.actor.state_dict(),
-                        "critic1": self.critic01.state_dict(),
-                        "critic2": self.critic02.state_dict()
-                    },
-                    self.sPath
-                )
+                # torch.save(
+                #     {
+                #         "actor": self.actor.state_dict(),
+                #         "critic1": self.critic01.state_dict(),
+                #         "critic2": self.critic02.state_dict()
+                #     },
+                #     self.sPath
+                # )

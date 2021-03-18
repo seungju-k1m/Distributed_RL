@@ -18,7 +18,7 @@
     "sPath":"./save/SAC/SAC_Variant/Humanoid.pth",
     "writeTMode":true,
     "tPath":"./tensorboard/SAC_Variant/Humanoid",
-    "lPath":"./save/SAC/SAC_Variant/Humanoid.pth",
+    "lPath":false,
     "leanerDevice":"cpu",
     "actorDevice":"cpu",
     "hostName":"localhost",

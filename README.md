@@ -42,6 +42,9 @@ Here is list of Algorithm I implemented (or will implement)
 
  **[Important] if you use mujoco environment, you must install mujoco-py from this.**
 
+**[Important] you must check ./cfg/algorithm.json. you can control the code by .json.**
+
  ## Run
 
-    python run_sac.py
+
+    python run_sac.py --train --num-gpu=1 --num-cpu=8
