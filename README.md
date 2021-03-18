@@ -26,15 +26,17 @@ Here is list of Algorithm I implemented (or will implement)
 
     Recommend you create the new development conda env for this repo.
 
-    conda create -n <env_name> python=3.7
+    conda create -n <env_name> python=3.6
+
+    git clone https://github.com/seungju-mmc/Distributed_RL.git
 
     git submodule init
 
     #  pull submodule from git 'baseline'
     #  If you read Readme.md from baseline, understand what it is.
+
     git submodule update
     
-
     pip install -r requirements.txt
 
 
