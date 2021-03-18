@@ -1,5 +1,4 @@
 import gc
-
 import ray
 import gym
 import time
@@ -15,25 +14,6 @@ from copy import deepcopy
 from PIL import Image as im
 
 
-def rgb_to_gray(img, W=84, H=84):
-    R = np.array(img[:, :, 0]/255, dtype=np.float32)
-    G = np.array(img[:, :, 1]/255, dtype=np.float32)
-    B = np.array(img[:, :, 2]/255, dtype=np.float32)
-
-    R = R * 0.299
-    G = G * 0.587
-    B = B * 0.114
-
-    grayImage = R + G + B
-    # grayImage = np.expand_dims(Avg, -1)
-    grayImage = im.fromarray(grayImage, mode='F')
-
-    grayImage = grayImage.resize((W, H))
-    grayImage = np.expand_dims(np.array(grayImage), 0)
-
-    return grayImage
-
-
 # @ray.remote(num_gpus=0.05, memory=500 * 1024 * 1024, num_cpus=1)
 class VTraceactor:
     def __init__(self, config: VTraceConfig, trainMode=True):
@@ -42,8 +22,8 @@ class VTraceactor:
         self.device = torch.device(self.config.actorDevice)
         self.buildModel()
         self._connect = redis.StrictRedis(host=self.config.hostName)
-        self._connect.delete("params")
-        self._connect.delete("Count")
+        names = self._connect.scan()
+        self._connect.delete(*names[-1])
         self.env = gym.make(self.config.envName)
         self.env.seed(np.random.randint(1, 1000))
         self.to()
@@ -57,6 +37,25 @@ class VTraceactor:
         H = self.config.stateSize[-2]
         for i in range(self.config.stack):
             self.obsDeque.append(np.zeros((1, H, W)))
+
+    @staticmethod
+    def rgb_to_gray(img, W=84, H=84):
+        R = np.array(img[:, :, 0] / 255, dtype=np.float32)
+        G = np.array(img[:, :, 1] / 255, dtype=np.float32)
+        B = np.array(img[:, :, 2] / 255, dtype=np.float32)
+
+        R = R * 0.299
+        G = G * 0.587
+        B = B * 0.114
+
+        grayImage = R + G + B
+        # grayImage = np.expand_dims(Avg, -1)
+        grayImage = im.fromarray(grayImage, mode="F")
+
+        grayImage = grayImage.resize((W, H))
+        grayImage = np.expand_dims(np.array(grayImage), 0)
+
+        return grayImage
 
     def buildModel(self):
         for netName, data in self.config.agent.items():
@@ -87,7 +86,7 @@ class VTraceactor:
             if state.ndim == 3:
                 state = np.expand_dims(state, 0)
             state = torch.tensor(state).float().to(self.device)
-            
+
             policy, __, action = self.forward(state)
         action = action.detach().cpu().numpy()
         policy = policy.detach().cpu().numpy()[0]
@@ -109,7 +108,7 @@ class VTraceactor:
                 self.countModel = count
 
     def stackObs(self, obs) -> np.array:
-        grayObs = rgb_to_gray(obs)
+        grayObs = self.rgb_to_gray(obs)
         self.obsDeque.append(grayObs)
         state = []
         for i in range(self.config.stack):
