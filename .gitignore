@@ -2,3 +2,4 @@
 __pycache__
 tensorboard/*
 save/*
+.DS_Store
