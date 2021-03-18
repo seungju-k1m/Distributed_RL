@@ -13,7 +13,8 @@ from itertools import count
 
 @ray.remote(num_gpus=0.05, memory=500 * 1024 * 1024, num_cpus=1)
 class VTraceactor:
-    def __init__(self, config: VTraceConfig):
+    def __init__(self, config: VTraceConfig, trainMode=True):
+        self.trainMode = trainMode
         self.config = config
         self.device = torch.device(self.config.actorDevice)
         self.buildModel()

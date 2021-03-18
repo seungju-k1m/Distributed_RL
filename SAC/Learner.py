@@ -1,4 +1,5 @@
 import gc
+import os
 import time
 import ray
 import redis
@@ -33,6 +34,16 @@ class Learner:
         self.to()
         if self.tMode:
             self.writer = SummaryWriter(self.config.tPath)
+        self.sPath = self.config.sPath
+
+        folder = ''
+        path_list = self.sPath.rsplit('/')
+        for i in range(len(path_list)-1):
+            folder += path_list[i] + '/'
+        folder = folder[:-1]
+        if os.path.exists(folder) is False:
+            os.mkdir(folder)
+            print("mkdir :", folder)
 
     def buildModel(self):
         for netName, data in self.config.agent.items():
@@ -114,8 +125,8 @@ class Learner:
         critic01 = self.critic01.forward(tuple([stateAction]))[0]
         critic02 = self.critic02.forward(tuple([stateAction]))[0]
 
-        lossCritic1 = torch.mean((critic01 - target[0]).pow(2) / 2)
-        lossCritic2 = torch.mean((critic02 - target[0]).pow(2) / 2)
+        lossCritic1 = torch.mean((critic01 - target).pow(2) / 2)
+        lossCritic2 = torch.mean((critic02 - target).pow(2) / 2)
 
         return lossCritic1, lossCritic2
     
@@ -171,6 +182,8 @@ class Learner:
             tCritic1 = self.tCritic01.forward([next_state_action])[0]
             tCritic2 = self.tCritic02.forward([next_state_action])[0]
 
+            minTarget = torch.min(tCritic1, tCritic2)
+
             done = torch.tensor(done).float()
             done -= 1
             done *= -1
@@ -181,12 +194,13 @@ class Learner:
             else:
                 temp = -self.temperature.exp() * logProbBatch
 
-            tCritic1 = reward + (tCritic1 + temp) * self.config.gamma * done
-            tCritic2 = reward + (tCritic2 + temp) * self.config.gamma * done
-
+            # tCritic1 = reward + (tCritic1 + temp) * self.config.gamma * done
+            # tCritic2 = reward + (tCritic2 + temp) * self.config.gamma * done
+            minTarget = reward + (minTarget + temp) * self.config.gamma * done
         self.zeroGrad()
 
-        lossC1, lossC2 = self.calculateQ(stateBatch, (tCritic1, tCritic2), actionBatch)
+        # lossC1, lossC2 = self.calculateQ(stateBatch, (tCritic1, tCritic2), actionBatch)
+        lossC1, lossC2 = self.calculateQ(stateBatch, minTarget, actionBatch)
         lossC1.backward()
         lossC2.backward()
         self.cOptim01.step()
@@ -250,7 +264,14 @@ class Learner:
             self.targetNetworkUpdate()
             self._connect.set("params", dumps(self.state_dict()))
             self._connect.set("Count", dumps(t))
-            if (t + 1) % 100 == 0:
+            if (t + 1) % 1000 == 0:
                 
-            #     print("Step: {}".format(t))
                 gc.collect()
+                torch.save(
+                    {
+                        "actor": self.actor.state_dict(),
+                        "critic1": self.critic01.state_dict(),
+                        "critic2": self.critic02.state_dict()
+                    },
+                    self.sPath
+                )

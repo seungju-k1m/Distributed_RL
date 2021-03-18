@@ -14,7 +14,9 @@ Here is list of Algorithm I implemented (or will implement)
 
 1. Soft Actor Critic
 
-2. Proximal Policy Optimization
+![](./docs/img/aa.gif)
+
+2. V_Trace, IMPALA
 
 3. Muzero
 
