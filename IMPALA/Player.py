@@ -144,9 +144,7 @@ class VTraceactor:
                     action, policy = self.getAction(nextState)
                 if self.trainMode:
                     self.localbuffer.append(reward)
-                    self.localbuffer.append(nextState.copy())
-                    self.localbuffer.append(action.copy())
-                    self.localbuffer.append(policy.copy())
+
                 self.env.render()
                 if self.trainMode is False:
                     time.sleep(0.01)
@@ -156,8 +154,16 @@ class VTraceactor:
                     self._connect.rpush("trajectory", _pickle.dumps(self.localbuffer))
                     self.localbuffer = []
                     self._pull_param()
+                    if done is False:
+                        self.localbuffer.append(deepcopy(cellstate))
                     n = 0
-
+                
+                if done is False:
+                    self.localbuffer.append(nextState.copy())
+                    self.localbuffer.append(action.copy())
+                    self.localbuffer.append(policy.copy())
+                else:
+                    self.model.zeroCellState()
             gc.collect()
 
             episode += 1

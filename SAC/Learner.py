@@ -37,6 +37,7 @@ class Learner:
         if self.tMode:
             self.writer = SummaryWriter(self.config.tPath)
         self.sPath = self.config.sPath
+        self.variantMode = self.config.variantMode
 
         folder = ''
         path_list = self.sPath.rsplit('/')
@@ -126,9 +127,12 @@ class Learner:
         stateAction = torch.cat((state, action), dim=1).detach()
         critic01 = self.critic01.forward(tuple([stateAction]))[0]
         critic02 = self.critic02.forward(tuple([stateAction]))[0]
-
-        lossCritic1 = torch.mean((critic01 - target).pow(2) / 2)
-        lossCritic2 = torch.mean((critic02 - target).pow(2) / 2)
+        if self.variantMode:
+            lossCritic1 = torch.mean((critic01 - target).pow(2) / 2)
+            lossCritic2 = torch.mean((critic02 - target).pow(2) / 2)
+        else:
+            lossCritic1 = torch.mean((critic01 - target[0]).pow(2) / 2)
+            lossCritic2 = torch.mean((critic02 - target[1]).pow(2) / 2)
 
         return lossCritic1, lossCritic2
     
@@ -196,9 +200,12 @@ class Learner:
             else:
                 temp = -self.temperature.exp() * logProbBatch
 
-            # tCritic1 = reward + (tCritic1 + temp) * self.config.gamma * done
-            # tCritic2 = reward + (tCritic2 + temp) * self.config.gamma * done
-            minTarget = reward + (minTarget + temp) * self.config.gamma * done
+            tCritic1 = reward + (tCritic1 + temp) * self.config.gamma * done
+            tCritic2 = reward + (tCritic2 + temp) * self.config.gamma * done
+            if self.variantMode:
+                minTarget = reward + (minTarget + temp) * self.config.gamma * done
+            else:
+                minTarget = (tCritic1, tCritic2)
         self.zeroGrad()
 
         # lossC1, lossC2 = self.calculateQ(stateBatch, (tCritic1, tCritic2), actionBatch)

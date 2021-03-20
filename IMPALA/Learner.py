@@ -25,7 +25,7 @@ class Learner:
 
         self._memory = Replay(self.config, connect=self._connect)
         self._memory.start()
-        
+
         self.tMode = self.config.writeTMode
         self._connect.delete("sample")
         self._connect.delete("Reward")
@@ -35,113 +35,35 @@ class Learner:
 
     def buildModel(self):
         for netName, data in self.config.agent.items():
-            if netName == "actor":
-                self.actor = baseAgent(data)
-            elif netName == "critic":
-                self.critic01 = baseAgent(data)
-                self.critic02 = baseAgent(data)
-                self.tCritic01 = baseAgent(data)
-                self.tCritic02 = baseAgent(data)
-
-        if self.config.fixedTemp:
-            self.temperature = self.config.tempValue
-
-        else:
-            self.temperature = torch.zeros(
-                1, requires_grad=True, device=self.device
-            )
+            if netName == "acto-critic":
+                self.model = baseAgent(data)
 
     def to(self):
-        self.actor.to(self.device)
-        self.critic01.to(self.device)
-        self.critic02.to(self.device)
-
-        self.tCritic01.to(self.device)
-        self.tCritic02.to(self.device)
+        self.model.to(self.device)
 
     def genOptim(self):
         for key, value in self.config.optim.items():
-            if key == "actor":
-                self.aOptim = getOptim(value, self.actor.buildOptim())
-
-            if key == "critic":
-                self.cOptim01 = getOptim(value, self.critic01.buildOptim())
-                self.cOptim02 = getOptim(value, self.critic02.buildOptim())
-
-            if key == "temperature":
-                if self.config.fixedTemp is False:
-                    self.tOptim = getOptim(value, self.temperature, floatV=True)
+            if key == "actor-critic":
+                self.mOptim = getOptim(value, self.model.buildOptim())
 
     def zeroGrad(self):
-        self.aOptim.zero_grad()
-        self.cOptim01.zero_grad()
-        self.cOptim02.zero_grad()
-        if self.config.fixedTemp is False:
-            self.tOptim.zero_grad()
+        self.mOptim.zero_grad()
 
     def forward(self, state):
         state: torch.tensor
-        output = self.actor.forward([state])[0]
-        mean, log_std = (
-            output[:, : self.config.actionSize],
-            output[:, self.config.actionSize :],
-        )
-        log_std = torch.clamp(log_std, -20, 2)
-        std = log_std.exp()
+        output = self.model.forward([state])[0]
+        logit_policy = output[:, : self.config.actionSize]
+        exp_policy = torch.exp(logit_policy)
+        policy = exp_policy / exp_policy.sum(dim=1)
+        value = output[:, -1:]
 
-        normal = torch.distributions.Normal(mean, std)
-        x_t = normal.rsample()
-        action = torch.tanh(x_t)
-        log_prob = normal.log_prob(x_t).sum(1, keepdim=True)
-        log_prob -= torch.log(1 - action.pow(2) + 1e-6).sum(1, keepdim=True)
-        entropy = (torch.log(std * (2 * 3.14) ** 0.5) + 0.5).sum(1, keepdim=True)
-
-        concat = torch.cat((state, action), dim=1)
-        critic01 = self.critic01.forward([concat])
-        critic02 = self.critic02.forward([concat])
-
-        return action, log_prob, (critic01, critic02), entropy
+        return policy, value
 
     def _wait_memory(self):
         while True:
-            if len(self._memory) > self.config.startStep:
+            if len(self._memory) > self.config.startMemory:
                 break
             time.sleep(0.1)
-
-    def calculateQ(self, state, target, action):
-        stateAction = torch.cat((state, action), dim=1).detach()
-        critic01 = self.critic01.forward(tuple([stateAction]))[0]
-        critic02 = self.critic02.forward(tuple([stateAction]))[0]
-
-        lossCritic1 = torch.mean((critic01 - target).pow(2) / 2)
-        lossCritic2 = torch.mean((critic02 - target).pow(2) / 2)
-
-        return lossCritic1, lossCritic2
-    
-    def calculateActor(self, state):
-
-        # 2. Calculate the loss of Actor
-        actor_state = state.clone().detach()
-
-        action, logProb, critics, entropy = self.forward(actor_state)
-        c1, c2 = critics[0][0], critics[1][0]
-        Actor_critic = torch.min(c1, c2)
-
-        if self.config.fixedTemp:
-            tempDetached = self.temperature
-        else:
-            tempDetached = self.temperature.exp().detach()
-
-        lossPolicy = torch.mean((tempDetached * logProb - Actor_critic))
-        detachedLogProb = logProb.detach()
-        if self.config.fixedTemp:
-            return lossPolicy, entropy
-
-        else:
-            lossTemp = torch.mean(
-                self.temperature.exp() * (-detachedLogProb + self.config.actionSize)
-            )
-            return lossPolicy, lossTemp, entropy
 
     def train(self, transition, step):
         state, action, reward, next_state, done = [], [], [], [], []
@@ -196,14 +118,14 @@ class Learner:
             lossP, entropy = self.calculateActor(stateBatch)
             lossP.backward()
             self.aOptim.step()
-        
+
         else:
             lossP, lossT, entropy = self.calculateActor(stateBatch)
             lossP.backward()
             lossT.backward()
             self.aOptim.step()
             self.tOptim.step()
-        
+
         if self.tMode:
             with torch.no_grad():
                 _lossP = lossP.detach().cpu().numpy()
@@ -221,18 +143,9 @@ class Learner:
                     _temperature = self.temperature.exp().detach().cpu().numpy()
                     self.writer.add_scalar("Temperature", _temperature, step)
 
-    def targetNetworkUpdate(self):
-        with torch.no_grad():
-            self.tCritic01.updateParameter(self.critic01, self.config.tau)
-            self.tCritic02.updateParameter(self.critic02, self.config.tau)
-
     def state_dict(self):
         weights = [
-            self.actor.state_dict(),
-            self.critic01.state_dict(),
-            self.critic02.state_dict(),
-            self.tCritic01.state_dict(),
-            self.tCritic02.state_dict(),
+            self.model.state_dict(),
         ]
         if self.config.fixedTemp is False:
             weights.append(self.temperature)
@@ -253,6 +166,6 @@ class Learner:
             self._connect.set("params", dumps(self.state_dict()))
             self._connect.set("Count", dumps(t))
             if (t + 1) % 100 == 0:
-                
-            #     print("Step: {}".format(t))
+
+                #     print("Step: {}".format(t))
                 gc.collect()

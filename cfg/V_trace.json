@@ -2,6 +2,7 @@
     "envName":"Breakout-v4",
 
     "replayMemory":200000,
+    "startMemory":1000,
     "batchSize":32,
     "RewardClipping":[-1, 1],
     "grayscale":true,

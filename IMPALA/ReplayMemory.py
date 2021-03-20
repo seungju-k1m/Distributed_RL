@@ -19,6 +19,9 @@ class Replay(threading.Thread):
         self._connect = connect
         self._connect.delete("trajectory")
         self._lock = threading.Lock()
+    
+    def parsing_trajectory(self, tra):
+        pass
 
     def run(self):
         t = 0
@@ -31,8 +34,9 @@ class Replay(threading.Thread):
             if data is not None:
                 for d in data:
                     p = loads(d)
-                    with self._lock:
-                        self._memory.push(p)
+                    self.parsing_trajectory(p)
+                    # with self._lock:
+                    #     self._memory.push(p)
             time.sleep(0.01)
             if (t % 100) == 0:
                 gc.collect()
