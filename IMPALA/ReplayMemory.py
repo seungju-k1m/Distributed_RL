@@ -4,11 +4,11 @@ import threading
 import redis
 
 from baseline.utils import loads, ReplayMemory
-from V_trace.Config import VTraceConfig
+from IMPALA.Config import IMPALAConfig
 
 
 class Replay(threading.Thread):
-    def __init__(self, config: VTraceConfig, connect=redis.StrictRedis(host="localhost")):
+    def __init__(self, config: IMPALAConfig, connect=redis.StrictRedis(host="localhost")):
         super(Replay, self).__init__()
 
         # main thread가 종료되면 그 즉시 종료되는 thread이다.
@@ -17,7 +17,6 @@ class Replay(threading.Thread):
         self._memory = ReplayMemory(int(config.replayMemory))
 
         self._connect = connect
-        self._connect.delete("trajectory")
         self._lock = threading.Lock()
     
     def parsing_trajectory(self, tra):
@@ -34,9 +33,8 @@ class Replay(threading.Thread):
             if data is not None:
                 for d in data:
                     p = loads(d)
-                    self.parsing_trajectory(p)
-                    # with self._lock:
-                    #     self._memory.push(p)
+                    with self._lock:
+                        self._memory.push(p)
             time.sleep(0.01)
             if (t % 100) == 0:
                 gc.collect()

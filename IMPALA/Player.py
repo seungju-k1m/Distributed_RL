@@ -6,7 +6,7 @@ import redis
 import torch
 import _pickle
 import numpy as np
-from V_trace.Config import VTraceConfig
+from IMPALA.Config import IMPALAConfig
 from baseline.baseAgent import baseAgent
 from collections import deque
 from itertools import count
@@ -15,15 +15,16 @@ from PIL import Image as im
 
 
 # @ray.remote(num_gpus=0.05, memory=500 * 1024 * 1024, num_cpus=1)
-class VTraceactor:
-    def __init__(self, config: VTraceConfig, trainMode=True):
+class Player:
+    def __init__(self, config: IMPALAConfig, trainMode=True):
         self.trainMode = trainMode
         self.config = config
         self.device = torch.device(self.config.actorDevice)
         self.buildModel()
         self._connect = redis.StrictRedis(host=self.config.hostName)
         names = self._connect.scan()
-        self._connect.delete(*names[-1])
+        if names[1] != []:
+            self._connect.delete(*names[-1])
         self.env = gym.make(self.config.envName)
         self.env.seed(np.random.randint(1, 1000))
         self.to()
@@ -82,6 +83,10 @@ class VTraceactor:
 
         if initMode:
             cellstate = self.model.getCellState()
+            hx, cx = cellstate
+            hx = hx.detach().cpu().numpy()[0]
+            cx = cx.detach().cpu().numpy()[0]
+            cellstate = (hx, cx)
         with torch.no_grad():
             if state.ndim == 3:
                 state = np.expand_dims(state, 0)
@@ -89,7 +94,7 @@ class VTraceactor:
 
             policy, __, action = self.forward(state)
         action = action.detach().cpu().numpy()
-        policy = policy.detach().cpu().numpy()[0]
+        policy = policy.detach().cpu().numpy()[0][action]
         if initMode:
             return action, policy, cellstate
         else:
@@ -116,10 +121,26 @@ class VTraceactor:
         state = np.concatenate(state, axis=0)
         return state
 
+    def checkLength(self, current, past):
+        totalLength = 1 + 4 * self.config.unroll_step
+        if len(current) == totalLength:
+            return current
+        else:
+            current.pop(0)
+            curLength = len(current)
+            pastLength = totalLength - 1 - curLength
+            initCell = past[0]
+            pastTrajectory = past[1: 1 + pastLength]
+            for ele in reversed(pastTrajectory):
+                current.insert(0, ele)
+            current.insert(0, initCell)
+            return current
+            
     def run(self):
         rewards = 0
         step = 1
         episode = 1
+        pastbuffer = []
 
         for t in count():
             self.resetObsDeque()
@@ -133,6 +154,7 @@ class VTraceactor:
                 self.localbuffer.append(state.copy())
                 self.localbuffer.append(action.copy())
                 self.localbuffer.append(policy.copy())
+
             while done is False:
                 nextobs, reward, done, _ = self.env.step(action)
                 nextState = self.stackObs(nextobs)
@@ -150,8 +172,12 @@ class VTraceactor:
                     time.sleep(0.01)
                 rewards += reward
 
-                if (n == self.config.unroll_step | done) and self.trainMode:
-                    self._connect.rpush("trajectory", _pickle.dumps(self.localbuffer))
+                if (n == self.config.unroll_step or done) and self.trainMode:
+                    self._connect.rpush("trajectory", _pickle.dumps(
+                        self.checkLength(self.localbuffer, pastbuffer)
+                    )
+                    )
+                    pastbuffer = self.localbuffer
                     self.localbuffer = []
                     self._pull_param()
                     if done is False:

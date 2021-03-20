@@ -1,7 +1,7 @@
 from baseline.utils import jsonParser
 
 
-class VTraceConfig:
+class IMPALAConfig:
     def __init__(self, path):
         parser = jsonParser(path)
         self.data = parser.loadParser()
