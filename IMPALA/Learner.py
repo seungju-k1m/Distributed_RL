@@ -136,6 +136,7 @@ class Learner:
                     )
             
             target = target.view(-1, 1)
+        
 
         if self.tMode:
             with torch.no_grad():
