@@ -122,7 +122,7 @@ class Player:
         return state
 
     def checkLength(self, current, past):
-        totalLength = 1 + 4 * self.config.unroll_step
+        totalLength = 2 + 4 * (self.config.unroll_step+1)
         if len(current) == totalLength:
             return current
         else:
@@ -172,7 +172,11 @@ class Player:
                     time.sleep(0.01)
                 rewards += reward
 
-                if (n == self.config.unroll_step or done) and self.trainMode:
+                if (n == (self.config.unroll_step+1) or done) and self.trainMode:
+                    if done is False:
+                        self.localbuffer.append(1)
+                    else:
+                        self.localbuffer.append(0)
                     self._connect.rpush("trajectory", _pickle.dumps(
                         self.checkLength(self.localbuffer, pastbuffer)
                     )

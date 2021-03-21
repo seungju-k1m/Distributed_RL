@@ -30,11 +30,14 @@ class Learner:
         self.to()
         if self.tMode:
             self.writer = SummaryWriter(self.config.tPath)
+        
+        self.config.c_value = torch.tensor(self.config.c_value).float().to(self.device)
+        self.config.p_value = torch.tensor(self.config.p_value).float().to(self.device)
 
     def buildModel(self):
         for netName, data in self.config.agent.items():
-            if netName == "acto-critic":
-                data["module02"]["shape"] = [-1, self.cofnig.unroll_step, 256]
+            if netName == "actor-critic":
+                data["module02"]["shape"] = [-1, self.config.batchSize, 256]
                 self.model = baseAgent(data)
 
     def to(self):
@@ -53,9 +56,13 @@ class Learner:
         output = self.model.forward([state])[0]
         logit_policy = output[:, : self.config.actionSize]
         exp_policy = torch.exp(logit_policy)
-        policy = exp_policy / exp_policy.sum(dim=1)
+        policy = exp_policy / exp_policy.sum(dim=1, keepdim=True)
+        ind = torch.arange(0, len(policy)) * 4 + actionBatch[:, 0]
+        ind = ind.long()
+        policy = policy.view(-1)
+        policy = policy[ind]
         value = output[:, -1:]
-        return policy[actionBatch], value
+        return policy, value
 
     def _wait_memory(self):
         while True:
@@ -66,19 +73,38 @@ class Learner:
     def totensor(self, value):
         return torch.tensor(value).float().to(self.device)
 
+    def calLoss(self, state, actionTarget, criticTarget, action):
+        output = self.model.forward([state])[0]
+        logit_policy = output[:, :self.config.actionSize]
+        exp_policy = torch.exp(logit_policy)
+        policy = exp_policy / exp_policy.sum(dim=1, keepdim=True)
+        logProb = torch.log(policy)
+        entropy = - torch.sum(policy * logProb, -1, keepdim=True)
+        ind = torch.arange(0, self.config.batchSize) * 4 + action[:, 0]
+        ind = ind.long()
+        selectedLogProb = logProb.view(-1)[ind]
+        selectedLogProb = selectedLogProb.view(-1, 1)
+        objActor = torch.mean(selectedLogProb * actionTarget+ self.config.EntropyRegularizer * entropy)
+
+        value = output[:, -1:]
+        criticLoss = torch.mean((value - criticTarget).pow(2))
+
+        return objActor, criticLoss, torch.mean(entropy).detach()
+
     def train(self, transition, step):
         """
-        cellstate, s, a, p, r s, a, p, r, ----, s, a, p, r
+        cellstate, s, a, p, r s, a, p, r, ----, s, a, p, r, d
         """
         # state, action, reward, next_state, done = [], [], [], [], []
-        hx, cx, state, action, policy, reward = [], [], [], [], [], []
-
+        hx, cx, state, action, policy, reward, done = [], [], [], [], [], [], []
+        trainState, trainAction = [], []
         with torch.no_grad():
-
             for trajectory in transition:
                 hx.append(self.totensor(trajectory[0][0]))
                 cx.append(self.totensor(trajectory[0][1]))
-                for i, ele in enumerate(trajectory[1:]):
+                trainState.append(self.totensor(trajectory[1]))
+                trainAction.append(self.totensor(trajectory[2]))
+                for i, ele in enumerate(trajectory[1:-1]):
                     x = i % 4
                     if x == 0:
                         state.append(self.totensor(ele))
@@ -88,36 +114,44 @@ class Learner:
                         policy.append(self.totensor(ele))
                     else:
                         reward.append(ele)
-
-            stateBatch = torch.cat(state, dim=0)
-            actionBatch = torch.cat(action, dim=0)
-            actorPolicyBatch = torch.cat(policy, dim=0)
-            hxBatch, cxBatch = torch.cat(hx, dim=1), torch.cat(cx, dim=1)
+                done.append(trajectory[-1])
+            stateBatch = torch.stack(state, dim=0)
+            trainState = torch.stack(trainState, dim=0)
+            trainAction = torch.stack(trainAction, dim=0)
+            actionBatch = torch.stack(action, dim=0)
+            actorPolicyBatch = torch.stack(policy, dim=0)
+            hxBatch, cxBatch = torch.cat(hx, dim=0), torch.cat(cx, dim=0)
+            hxBatch = torch.unsqueeze(hxBatch, 0)
+            cxBatch = torch.unsqueeze(cxBatch, 0)
             initCellState = (hxBatch, cxBatch)
+            done = self.totensor(done)
+            done = done.view(-1, 1)
             reward = (
                 torch.tensor(reward)
                 .float()
                 .to(self.device)
-                .view(self.config.batchSize, self.config.unroll_step, 1)
+                .view(self.config.batchSize, self.config.unroll_step+1, 1)
             )  # 256
+
 
             self.model.setCellState(initCellState)
             learnerPolicy, learnerValue = self.forward(stateBatch, actionBatch)
             # 20*32, 1, 20*32, 1
             learnerPolicy = learnerPolicy.view(
-                self.config.batchSize, self.config.unroll_step, 1
+                self.config.batchSize, self.config.unroll_step+1, 1
             )
             learnerValue = learnerValue.view(
-                self.config.batchSize, self.config.unroll_step, 1
+                self.config.batchSize, self.config.unroll_step+1, 1
             )
-            target = torch.zeros_like(learnerValue)
+            target = torch.zeros((self.config.batchSize, self.config.unroll_step, 1)).float().to(self.device)
+
             actorPolicy = actorPolicyBatch.view(
-                self.config.batchSize, self.config.unroll_step, 1
+                self.config.batchSize, self.config.unroll_step+1, 1
             )
 
-            for i in reversed(range(self.config.batchSize)):
-                if i == (self.config.unroll_step - 1):
-                    target[:, i, :] = learnerValue[:, i, :]
+            for i in reversed(range(self.config.unroll_step)):
+                if i == (self.config.unroll_step-1):
+                    target[:, i, :] = reward[:, i, :] + self.config.gamma * learnerValue[:, i+1, :] * done
                 else:
                     td = (
                         reward[:, i, :]
@@ -125,7 +159,7 @@ class Learner:
                         - learnerValue[:, i, :]
                     )
                     ratio = learnerPolicy[:, i, :] / actorPolicy[:, i, :]
-                    cs = self.config.c_lambda * torch.min(self.config.c_value, ratio)
+                    cs = self.config.c_lambda * torch.min(torch.tensor(self.config.c_value), ratio)
                     ps = torch.min(self.config.p_value, ratio)
                     target[:, i, :] = (
                         learnerValue[:, i, :]
@@ -134,33 +168,45 @@ class Learner:
                         * cs
                         * (target[:, i + 1, :] - learnerValue[:, i + 1, :])
                     )
-            
-            target = target.view(-1, 1)
-        
+            # target , batchSize, num+1, 1
+            Vtarget = target[:, 0:1, 0]
+            ATarget = reward[:, 0:1, 0] + self.config.gamma * target[:, 1:2, 0]
+            advantage = ATarget - learnerValue[:, 0, :]
+
+        objActor, criticLoss, entropy = self.calLoss(trainState, advantage, Vtarget, trainAction)
+        self.zeroGrad()
+        loss = -objActor + criticLoss
+        loss.backward()
+        self.step(step)
 
         if self.tMode:
             with torch.no_grad():
-                _lossP = lossP.detach().cpu().numpy()
-                _lossC1 = lossC1.detach().cpu().numpy()
-                _minTarget = mintarget.mean().detach().cpu().numpy()
-                _entropy = entropy.mean().detach().cpu().numpy()
-                _Reward = self._connect.get("Reward")
-                _Reward = loads(_Reward)
-                self.writer.add_scalar("Loss of Policy", _lossP, step)
-                self.writer.add_scalar("Loss of Critic", _lossC1, step)
-                self.writer.add_scalar("mean of Target", _minTarget, step)
-                self.writer.add_scalar("Entropy", _entropy, step)
-                self.writer.add_scalar("Reward", _Reward, step)
-                if self.config.fixedTemp is False:
-                    _temperature = self.temperature.exp().detach().cpu().numpy()
-                    self.writer.add_scalar("Temperature", _temperature, step)
+                _objActor = objActor.detach().cpu().numpy()
+                _criticLoss = criticLoss.detach().cpu().numpy()
+                _entropy = entropy.detach().cpu().numpy()
 
+                reward_pip = self._connect.pipeline()
+                reward_pip.lrange("Reward", 0, -1)
+                reward_pip.ltrim("Reward", -1, 0)
+                _Reward = reward_pip.execute()[0]
+                if _Reward is not None:
+                    Reward = np.array(loads(_Reward)).mean()
+                    self.writer.add_scalar("Reward", Reward, step)
+                self.writer.add_scalar("Objective of Actor", _lossP, step)
+                self.writer.add_scalar("Loss of Critic", _lossC1, step)
+                self.writer.add_scalar("Entropy", _entropy, step)
+
+    def step(self, step):
+        self.model.clippingNorm(self.config.gradientNorm)
+        norm_gradient = self.model.calculateNorm().cpu().detach().numpy()
+
+        if self.tMode:
+            self.writer.add_scalar('Norm of Gradient', norm_gradient, step)
+        
     def state_dict(self):
         weights = [
             self.model.state_dict(),
         ]
-        if self.config.fixedTemp is False:
-            weights.append(self.temperature)
         return tuple(weights)
 
     def run(self):
@@ -174,10 +220,8 @@ class Learner:
             self.zeroGrad()
 
             self.train(transitions, t)
-            self.targetNetworkUpdate()
             self._connect.set("params", dumps(self.state_dict()))
             self._connect.set("Count", dumps(t))
             if (t + 1) % 100 == 0:
 
-                #     print("Step: {}".format(t))
                 gc.collect()

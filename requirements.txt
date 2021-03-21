@@ -6,3 +6,4 @@ tensorboard==2.4.0
 torch==1.7.1
 torchfile==0.1.0
 torchvision==0.8.2
+pyglet==1.5.11

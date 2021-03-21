@@ -2,7 +2,7 @@
     "envName":"Breakout-v4",
 
     "replayMemory":200000,
-    "startMemory":1000,
+    "startMemory":100,
     "batchSize":32,
     "RewardClipping":[-1, 1],
     "grayscale":true,
@@ -16,13 +16,14 @@
     "actionSize":4,
     "stateSize":[4, 84, 84],
     "unroll_step":20,
+    "gradientNorm":40,
 
     "sPath":"./save/V_Trace/",
     "writeTMode":false,
     "tPath":"./tensorboard/V_Trace/BreakOut-v0",
     "lPath":false,
-    "leanerDevice":"cuda:0",
-    "actorDevice":"cuda:0",
+    "leanerDevice":"cpu",
+    "actorDevice":"cpu",
     "hostName":"localhost",
 
     "optim":{
@@ -72,8 +73,9 @@
                 "nLayer":1,
                 "hiddenSize":256,
                 "FlattenMode":true,
-                "device":"cuda:0",
+                "device":"cpu",
                 "prior":3,
+                "Number_Agent":1,
                 "prevNodeNames":["module02"]
             },
             "module04":{
