@@ -65,13 +65,10 @@ if __name__ == "__main__":
 
     config = IMPALAConfig(args.path)
 
-    # not instance
-    # remoteNetwork = ray.remote(sacPlayer)
-    # remoteNetwork.options(num_gpus=0.25)
     Networks = []
     for i in range(NUMSIM):
         Networks.append(Player.remote(config, args.train))
 
-    if args.train:
-        Networks.append(Learner.remote(config))
+    # if args.train:
+    #     Networks.append(Learner.remote(config))
     ray.get([Network.run.remote() for Network in Networks])

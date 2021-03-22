@@ -14,7 +14,7 @@ from copy import deepcopy
 from PIL import Image as im
 
 
-# @ray.remote(num_gpus=0.05, memory=500 * 1024 * 1024, num_cpus=1)
+@ray.remote(num_gpus=0.05, memory=100 * 1024 * 1024, num_cpus=1)
 class Player:
     def __init__(self, config: IMPALAConfig, trainMode=True):
         self.trainMode = trainMode
@@ -41,9 +41,9 @@ class Player:
 
     @staticmethod
     def rgb_to_gray(img, W=84, H=84):
-        R = np.array(img[:, :, 0] / 255, dtype=np.float32)
-        G = np.array(img[:, :, 1] / 255, dtype=np.float32)
-        B = np.array(img[:, :, 2] / 255, dtype=np.float32)
+        R = np.array(img[:, :, 0], dtype=np.float32)
+        G = np.array(img[:, :, 1], dtype=np.float32)
+        B = np.array(img[:, :, 2], dtype=np.float32)
 
         R = R * 0.299
         G = G * 0.587
@@ -52,15 +52,15 @@ class Player:
         grayImage = R + G + B
         # grayImage = np.expand_dims(Avg, -1)
         grayImage = im.fromarray(grayImage, mode="F")
-
-        grayImage = grayImage.resize((W, H))
+        grayImage = grayImage.resize((W, H), im.NEAREST)
         grayImage = np.expand_dims(np.array(grayImage), 0)
 
-        return grayImage
+        return np.uint8(grayImage)
 
     def buildModel(self):
         for netName, data in self.config.agent.items():
             if netName == "actor-critic":
+                data["module03"]["device"] = self.config.actorDevice
                 self.model = baseAgent(data)
 
     def forward(self, state):
@@ -90,7 +90,7 @@ class Player:
         with torch.no_grad():
             if state.ndim == 3:
                 state = np.expand_dims(state, 0)
-            state = torch.tensor(state).float().to(self.device)
+            state = torch.tensor(state / 255).float().to(self.device)
 
             policy, __, action = self.forward(state)
         action = action.detach().cpu().numpy()
@@ -109,7 +109,7 @@ class Player:
                 count = _pickle.loads(count)
             if self.countModel != count:
                 params = _pickle.loads(params)
-                self.model.load_state_dict(params)
+                self.model.load_state_dict(params[0])
                 self.countModel = count
 
     def stackObs(self, obs) -> np.array:
@@ -119,30 +119,51 @@ class Player:
         for i in range(self.config.stack):
             state.append(self.obsDeque[i])
         state = np.concatenate(state, axis=0)
-        return state
+        return np.uint8(state)
 
-    def checkLength(self, current, past):
-        totalLength = 2 + 4 * (self.config.unroll_step+1)
-        if len(current) == totalLength:
-            return current
-        else:
+    def preprocessTraj(self, traj):
+        # cell, s, a, p, r, ----
+        pT = []
+        pT.append(traj[0][0])
+        pT.append(traj[0][1])
+        for i in range(4):
+            pT.append([])
+        for i, data in enumerate(traj[1:-1]):
+            x = i % 4
+            pT[x + 2].append(data)
+
+        pT[2] = np.stack(pT[2], axis=0)  # state
+        pT[3] = np.stack(pT[3], axis=0)
+        pT[4] = np.stack(pT[4], axis=0)
+        pT.append(traj[-1])
+
+        return pT
+
+    def checkLength(self, current, past, cell):
+        totalLength = 2 + 4 * (self.config.unroll_step + 1)
+        if len(current) != totalLength:
+            
             current.pop(0)
             curLength = len(current)
             pastLength = totalLength - 1 - curLength
-            initCell = past[0]
-            pastTrajectory = past[1: 1 + pastLength]
+            pastTrajectory = past[-pastLength - 1 : -1]
             for ele in reversed(pastTrajectory):
                 current.insert(0, ele)
-            current.insert(0, initCell)
-            return current
-            
+            cellInd = self.config.unroll_step - int(pastLength / 4)
+            current.insert(0, cell[cellInd])
+        
+        return self.preprocessTraj(current)
+
     def run(self):
         rewards = 0
         step = 1
         episode = 1
         pastbuffer = []
+        cellBuffer = []
+        pastCellBuffer = []
 
         for t in count():
+            self.localbuffer.clear()
             self.resetObsDeque()
             obs = self.env.reset()
             state = self.stackObs(obs)
@@ -160,40 +181,49 @@ class Player:
                 nextState = self.stackObs(nextobs)
                 step += 1
                 n += 1
-                if n == self.config.unroll_step:
-                    action, policy, cellstate = self.getAction(nextState, initMode=True)
-                else:
-                    action, policy = self.getAction(nextState)
+                action, policy, cellstate = self.getAction(nextState, initMode=True)
                 if self.trainMode:
                     self.localbuffer.append(reward)
-
                 self.env.render()
                 if self.trainMode is False:
                     time.sleep(0.01)
                 rewards += reward
 
-                if (n == (self.config.unroll_step+1) or done) and self.trainMode:
+                if (n == (self.config.unroll_step + 1) or done) and self.trainMode:
                     if done is False:
                         self.localbuffer.append(1)
                     else:
                         self.localbuffer.append(0)
-                    self._connect.rpush("trajectory", _pickle.dumps(
-                        self.checkLength(self.localbuffer, pastbuffer)
+                    self._connect.rpush(
+                        "trajectory",
+                        _pickle.dumps(
+                            self.checkLength(
+                                self.localbuffer, pastbuffer, pastCellBuffer
+                            )
+                        ),
                     )
-                    )
-                    pastbuffer = self.localbuffer
-                    self.localbuffer = []
+                    pastbuffer.clear()
+                    pastCellBuffer.clear()
+
+                    pastCellBuffer = cellBuffer.copy()
+                    pastbuffer = self.localbuffer.copy()
+
+                    self.localbuffer.clear()
+                    cellBuffer.clear()
+
                     self._pull_param()
-                    if done is False:
-                        self.localbuffer.append(deepcopy(cellstate))
+                    self.localbuffer.append(deepcopy(cellstate))
                     n = 0
-                
+
                 if done is False:
+                    # self.localbuffer.append(deepcopy(cellstate))
+                    cellBuffer.append(deepcopy(cellstate))
                     self.localbuffer.append(nextState.copy())
                     self.localbuffer.append(action.copy())
                     self.localbuffer.append(policy.copy())
                 else:
                     self.model.zeroCellState()
+
             gc.collect()
 
             episode += 1

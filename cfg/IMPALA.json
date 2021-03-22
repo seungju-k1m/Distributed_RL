@@ -1,8 +1,8 @@
 {
     "envName":"Breakout-v4",
 
-    "replayMemory":200000,
-    "startMemory":100,
+    "replayMemory":10000,
+    "startMemory":500,
     "batchSize":32,
     "RewardClipping":[-1, 1],
     "grayscale":true,
@@ -10,7 +10,7 @@
     "c_lambda":0.997,
     "c_value":1.0,
     "p_value":1.0,
-    "EntropyRegularizer":0.01,
+    "EntropyRegularizer":0.00025,
     "clipingGradientNorm":40,
     "stack":4,
     "actionSize":4,
@@ -18,11 +18,11 @@
     "unroll_step":20,
     "gradientNorm":40,
 
-    "sPath":"./save/V_Trace/",
-    "writeTMode":false,
-    "tPath":"./tensorboard/V_Trace/BreakOut-v0",
+    "sPath":"./save/IMPALA/",
+    "writeTMode":true,
+    "tPath":"./tensorboard/IMPALA/BreakOut-v4",
     "lPath":false,
-    "leanerDevice":"cpu",
+    "learnerDevice":"cuda:0",
     "actorDevice":"cpu",
     "hostName":"localhost",
 
@@ -31,7 +31,7 @@
             "name":"rmsprop",
             "lr":0.0006,
             "momentum":0,
-            "epsilon":0.01
+            "eps":0.01
         }
 
     },
