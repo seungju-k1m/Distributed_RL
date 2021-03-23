@@ -152,7 +152,7 @@ class Learner:
 
             for i in reversed(range(self.config.unroll_step + 1)):
                 if i == (self.config.unroll_step):
-                    target[i, :, :] += learnerValue[i, :, :] * done
+                    target[i, :, :] += learnerValue[i, :, :]
                 else:
                     td = (
                         reward[i, :, :]
