@@ -1,7 +1,7 @@
 {
     "envName":"Breakout-v4",
 
-    "lstmMode":false,
+    "lstmMode":true,
 
     "replayMemory":10000,
     "startMemory":500,
@@ -56,13 +56,40 @@
             "module01":{
                 "netCat":"MLP",
                 "iSize":2592,
-                "nLayer":2,
-                "fSize":[256, 5],
-                "act":["relu", "linear"],
+                "nLayer":1,
+                "fSize":[256],
+                "act":["relu"],
                 "BN":false,
                 "prior":1,
-                "prevNodeNames":["module00"],
-                "output":true
+                "prevNodeNames":["module00"]
+            },
+            "module02":{
+                "netCat":"View",
+                "shape":[-1, 1, 256],
+                "prior":2,
+                "prevNodeNames":["module01"]
+            },
+            "module03":{
+                "netCat":"LSTMNET",
+                "iSize":256,
+                "nLayer":1,
+                "hiddenSize":256,
+                "FlattenMode":true,
+                "device":"cpu",
+                "prior":3,
+                "Number_Agent":1,
+                "prevNodeNames":["module02"]
+            },
+            "module04":{
+                "netCat":"MLP",
+                "iSize":256,
+                "nLayer":1,
+                "fSize":[5],
+                "act":["linear"],
+                "BN":false,
+                "output":true,
+                "prevNodeNames":["module03"],
+                "prior":4
             }
         }
     }

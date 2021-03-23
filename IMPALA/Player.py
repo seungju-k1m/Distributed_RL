@@ -10,7 +10,6 @@ from IMPALA.Config import IMPALAConfig
 from baseline.baseAgent import baseAgent
 from collections import deque
 from itertools import count
-from copy import deepcopy
 from PIL import Image as im
 
 
@@ -60,7 +59,6 @@ class Player:
     def buildModel(self):
         for netName, data in self.config.agent.items():
             if netName == "actor-critic":
-                data["module03"]["device"] = self.config.actorDevice
                 self.model = baseAgent(data)
 
     def forward(self, state):
@@ -79,14 +77,8 @@ class Player:
         device = torch.device(self.config.actorDevice)
         self.model.to(device)
 
-    def getAction(self, state: np.array, initMode=False) -> np.array:
+    def getAction(self, state: np.array) -> np.array:
 
-        if initMode:
-            cellstate = self.model.getCellState()
-            hx, cx = cellstate
-            hx = hx.detach().cpu().numpy()[0]
-            cx = cx.detach().cpu().numpy()[0]
-            cellstate = (hx, cx)
         with torch.no_grad():
             if state.ndim == 3:
                 state = np.expand_dims(state, 0)
@@ -95,10 +87,7 @@ class Player:
             policy, __, action = self.forward(state)
         action = action.detach().cpu().numpy()
         policy = policy.detach().cpu().numpy()[0][action]
-        if initMode:
-            return action, policy, cellstate
-        else:
-            return action, policy
+        return action, policy
 
     def _pull_param(self):
         params = self._connect.get("params")
@@ -122,36 +111,32 @@ class Player:
         return np.uint8(state)
 
     def preprocessTraj(self, traj):
-        # cell, s, a, p, r, ----
+        # s, a, p, r, ----
         pT = []
-        pT.append(traj[0][0])
-        pT.append(traj[0][1])
         for i in range(4):
             pT.append([])
-        for i, data in enumerate(traj[1:-1]):
+        for i, data in enumerate(traj[:-1]):
             x = i % 4
-            pT[x + 2].append(data)
+            pT[x].append(data)
 
-        pT[2] = np.stack(pT[2], axis=0)  # state
+        pT[0] = np.stack(pT[0], axis=0)  # state
+        pT[1] = np.stack(pT[1], axis=0)  # action
+        pT[2] = np.stack(pT[2], axis=0)  # policy
         pT[3] = np.stack(pT[3], axis=0)
-        pT[4] = np.stack(pT[4], axis=0)
         pT.append(traj[-1])
 
         return pT
 
-    def checkLength(self, current, past, cell):
-        totalLength = 2 + 4 * (self.config.unroll_step + 1)
+    def checkLength(self, current, past):
+        totalLength = 1 + 4 * (self.config.unroll_step + 1)
         if len(current) != totalLength:
-            
-            current.pop(0)
+
             curLength = len(current)
-            pastLength = totalLength - 1 - curLength
+            pastLength = totalLength - curLength
             pastTrajectory = past[-pastLength - 1 : -1]
             for ele in reversed(pastTrajectory):
                 current.insert(0, ele)
-            cellInd = self.config.unroll_step - int(pastLength / 4)
-            current.insert(0, cell[cellInd])
-        
+
         return self.preprocessTraj(current)
 
     def run(self):
@@ -159,19 +144,16 @@ class Player:
         step = 1
         episode = 1
         pastbuffer = []
-        cellBuffer = []
-        pastCellBuffer = []
 
         for t in count():
             self.localbuffer.clear()
             self.resetObsDeque()
             obs = self.env.reset()
             state = self.stackObs(obs)
-            action, policy, cellstate = self.getAction(state, initMode=True)
+            action, policy = self.getAction(state)
             done = False
             n = 0
             if self.trainMode:
-                self.localbuffer.append(deepcopy(cellstate))
                 self.localbuffer.append(state.copy())
                 self.localbuffer.append(action.copy())
                 self.localbuffer.append(policy.copy())
@@ -181,7 +163,7 @@ class Player:
                 nextState = self.stackObs(nextobs)
                 step += 1
                 n += 1
-                action, policy, cellstate = self.getAction(nextState, initMode=True)
+                action, policy = self.getAction(nextState)
                 if self.trainMode:
                     self.localbuffer.append(reward)
                 self.env.render()
@@ -196,33 +178,19 @@ class Player:
                         self.localbuffer.append(0)
                     self._connect.rpush(
                         "trajectory",
-                        _pickle.dumps(
-                            self.checkLength(
-                                self.localbuffer, pastbuffer, pastCellBuffer
-                            )
-                        ),
+                        _pickle.dumps(self.checkLength(self.localbuffer, pastbuffer)),
                     )
                     pastbuffer.clear()
-                    pastCellBuffer.clear()
-
-                    pastCellBuffer = cellBuffer.copy()
                     pastbuffer = self.localbuffer.copy()
 
                     self.localbuffer.clear()
-                    cellBuffer.clear()
-
                     self._pull_param()
-                    self.localbuffer.append(deepcopy(cellstate))
                     n = 0
 
                 if done is False:
-                    # self.localbuffer.append(deepcopy(cellstate))
-                    cellBuffer.append(deepcopy(cellstate))
                     self.localbuffer.append(nextState.copy())
                     self.localbuffer.append(action.copy())
                     self.localbuffer.append(policy.copy())
-                else:
-                    self.model.zeroCellState()
 
             gc.collect()
 

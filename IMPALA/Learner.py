@@ -38,8 +38,6 @@ class Learner:
     def buildModel(self):
         for netName, data in self.config.agent.items():
             if netName == "actor-critic":
-                data["module02"]["shape"] = [-1, self.config.batchSize, 256]
-                data["module03"]["device"] = self.config.learnerDevice
                 self.model = baseAgent(data)
 
     def to(self):
@@ -110,22 +108,18 @@ class Learner:
             transition[i] = loads(transition[i])
         with torch.no_grad():
             transition = np.array(transition)
-            hxBatch = self.totensor(np.array([k for k in transition[:, 0]]))
-            hxBatch = hxBatch.permute(1, 0, 2).contiguous()
-            cxBatch = self.totensor(np.array([k for k in transition[:, 1]]))
-            cxBatch = cxBatch.permute(1, 0, 2).contiguous()
             done = np.array([k for k in transition[:, -1]])
             # seq, batch, data
 
             div = torch.tensor(255).float().to(self.device)
 
-            state = self.totensor(np.array([k for k in transition[:, 2]]), torch.uint8)
+            state = self.totensor(np.array([k for k in transition[:, 0]]), torch.uint8)
             state = (state/div).permute(1, 0, 2, 3, 4).contiguous()
-            action = self.totensor(np.array([k for k in transition[:, 3]]))
+            action = self.totensor(np.array([k for k in transition[:, 1]]))
             action = action.permute(1, 0, 2).contiguous()
-            policy = self.totensor(np.array([k for k in transition[:, 4]]))
+            policy = self.totensor(np.array([k for k in transition[:, 2]]))
             policy = policy.permute(1, 0, 2).contiguous()
-            reward = self.totensor(np.array([k for k in transition[:, 5]]))
+            reward = self.totensor(np.array([k for k in transition[:, 3]]))
             reward = reward.permute(1, 0).contiguous()
 
             trainState = state[0, :, :, :]
@@ -134,7 +128,6 @@ class Learner:
             stateBatch = state.view(-1, 4, 84, 84)
             actionBatch = action.view(-1, 1)
             actorPolicyBatch = policy.view(-1, 1)
-            initCellState = (hxBatch, cxBatch)
             done = self.totensor(done)
             done = done.view(-1, 1)
             reward = (
@@ -142,7 +135,6 @@ class Learner:
                 .view(self.config.unroll_step + 1, self.config.batchSize, 1)
             )  # 256
 
-            self.model.setCellState(initCellState)
             learnerPolicy, learnerValue = self.forward(stateBatch, actionBatch)
             # 20*32, 1, 20*32, 1
             learnerPolicy = learnerPolicy.view(
@@ -189,7 +181,6 @@ class Learner:
                 -1, 1
             )
             advantage = (ATarget - learnerValue[0,:,:]) * ps
-        self.model.detachCellState()
         objActor, criticLoss, entropy = self.calLoss(
             trainState.detach(),
             advantage.detach(),
