@@ -14,7 +14,7 @@ from baseline.baseAgent import baseAgent
 from torch.utils.tensorboard import SummaryWriter
 
 
-@ray.remote(num_gpus=0.1, num_cpus=4)
+# @ray.remote(num_gpus=0.1, num_cpus=4)
 class Learner:
     def __init__(self, cfg: IMPALAConfig):
         self.config = cfg
@@ -93,7 +93,7 @@ class Learner:
         )
 
         value = output[:, -1:]
-        criticLoss = torch.mean((value - criticTarget).pow(2))/2
+        criticLoss = torch.mean((value - criticTarget).pow(2)) / 2
 
         return objActor, criticLoss, torch.mean(entropy).detach()
 
@@ -104,6 +104,7 @@ class Learner:
         # state, action, reward, next_state, done = [], [], [], [], []
 
         trainState, trainAction = [], []
+        t = time.time()
         for i in range(len(transition)):
             transition[i] = loads(transition[i])
         with torch.no_grad():
@@ -114,7 +115,7 @@ class Learner:
             div = torch.tensor(255).float().to(self.device)
 
             state = self.totensor(np.array([k for k in transition[:, 0]]), torch.uint8)
-            state = (state/div).permute(1, 0, 2, 3, 4).contiguous()
+            state = (state / div).permute(1, 0, 2, 3, 4).contiguous()
             action = self.totensor(np.array([k for k in transition[:, 1]]))
             action = action.permute(1, 0, 2).contiguous()
             policy = self.totensor(np.array([k for k in transition[:, 2]]))
@@ -130,9 +131,8 @@ class Learner:
             actorPolicyBatch = policy.view(-1, 1)
             done = self.totensor(done)
             done = done.view(-1, 1)
-            reward = (
-                reward
-                .view(self.config.unroll_step + 1, self.config.batchSize, 1)
+            reward = reward.view(
+                self.config.unroll_step + 1, self.config.batchSize, 1
             )  # 256
 
             learnerPolicy, learnerValue = self.forward(stateBatch, actionBatch)
@@ -180,7 +180,7 @@ class Learner:
             ATarget = (reward[0:1, :, 0] + self.config.gamma * target[1:2, :, 0]).view(
                 -1, 1
             )
-            advantage = (ATarget - learnerValue[0,:,:]) * ps
+            advantage = (ATarget - learnerValue[0, :, :]) * ps
         objActor, criticLoss, entropy = self.calLoss(
             trainState.detach(),
             advantage.detach(),
@@ -201,15 +201,16 @@ class Learner:
                 reward_pip.lrange("Reward", 0, -1)
                 reward_pip.ltrim("Reward", -1, 0)
                 _Reward = reward_pip.execute()[0]
-                __Reward = []
-                # if _Reward is not None:
-                # for r in _Reward:
-                #     __Reward.append(loads(r))
-                # Reward = np.array(__Reward).mean()
-                # self.writer.add_scalar("Reward", Reward, step)
+
+                if len(_Reward) != 0:
+                    rewardSum = 0
+                    for r in _Reward:
+                        rewardSum += loads(r)
+                    self.writer.add_scalar("Reward", rewardSum/len(_Reward), step)
                 self.writer.add_scalar("Objective of Actor", _objActor, step)
                 self.writer.add_scalar("Loss of Critic", _criticLoss, step)
                 self.writer.add_scalar("Entropy", _entropy, step)
+                self.writer.add_scalar("training_Time", time.time() - t, step)
 
     def step(self, step):
         self.model.clippingNorm(self.config.gradientNorm)
