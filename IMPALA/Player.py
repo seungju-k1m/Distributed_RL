@@ -29,14 +29,13 @@ class Player:
         self.to()
         self.countModel = -1
         self.obsDeque = deque(maxlen=self.config.stack)
-        self.resetObsDeque()
+        # self.resetObsDeque()
         self.localbuffer = []
 
-    def resetObsDeque(self):
-        W = self.config.stateSize[-1]
-        H = self.config.stateSize[-2]
+    def resetObsDeque(self, obs):
+        grayObs = self.rgb_to_gray(obs)
         for i in range(self.config.stack):
-            self.obsDeque.append(np.zeros((1, H, W)))
+            self.obsDeque.append(grayObs)
 
     @staticmethod
     def rgb_to_gray(img, W=84, H=84):
@@ -147,8 +146,8 @@ class Player:
 
         for t in count():
             self.localbuffer.clear()
-            self.resetObsDeque()
             obs = self.env.reset()
+            self.resetObsDeque(obs)
             state = self.stackObs(obs)
             action, policy = self.getAction(state)
             done = False
