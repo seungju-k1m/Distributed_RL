@@ -74,6 +74,7 @@ class Learner:
         return torch.tensor(value, dtype=dtype).to(self.device)
 
     def calLoss(self, state, actionTarget, criticTarget, action):
+        action = action[:-1].view(-1, 1)
         output = self.model.forward([state])[0]
         logit_policy = output[:, : self.config.actionSize]
         exp_policy = torch.exp(logit_policy)
@@ -81,7 +82,7 @@ class Learner:
         logProb = torch.log(policy)
         entropy = -torch.sum(policy * logProb, -1, keepdim=True)
         ind = (
-            torch.arange(0, self.config.batchSize).to(self.device)
+            torch.arange(0, self.config.batchSize * self.config.unroll_step).to(self.device)
             * self.config.actionSize
             + action[:, 0]
         )
@@ -92,8 +93,8 @@ class Learner:
             selectedLogProb * actionTarget + self.config.EntropyRegularizer * entropy
         )
 
-        value = output[:, -1:]
-        criticLoss = torch.mean((value - criticTarget).pow(2)) / 2
+        value = output[:, -1]
+        criticLoss = torch.mean((value - criticTarget[:, 0]).pow(2)) / 2
 
         return objActor, criticLoss, torch.mean(entropy).detach()
 
@@ -103,7 +104,6 @@ class Learner:
         """
         # state, action, reward, next_state, done = [], [], [], [], []
 
-        trainState, trainAction = [], []
         t = time.time()
         for i in range(len(transition)):
             transition[i] = loads(transition[i])
@@ -123,9 +123,6 @@ class Learner:
             reward = self.totensor(np.array([k for k in transition[:, 3]]))
             reward = reward.permute(1, 0).contiguous()
 
-            trainState = state[0, :, :, :]
-            trainAction = action[0, :]
-
             stateBatch = state.view(-1, 4, 84, 84)
             actionBatch = action.view(-1, 1)
             actorPolicyBatch = policy.view(-1, 1)
@@ -144,7 +141,7 @@ class Learner:
                 self.config.unroll_step + 1, self.config.batchSize, 1
             )
             target = (
-                torch.zeros((self.config.unroll_step, self.config.batchSize, 1))
+                torch.zeros((self.config.unroll_step + 1, self.config.batchSize, 1))
                 .float()
                 .to(self.device)
             )
@@ -153,12 +150,9 @@ class Learner:
                 self.config.unroll_step + 1, self.config.batchSize, 1
             )
 
-            for i in reversed(range(self.config.unroll_step)):
-                if i == (self.config.unroll_step - 1):
-                    target[i, :, :] += (
-                        reward[i, :, :]
-                        + self.config.gamma * learnerValue[i + 1, :, :] * done
-                    )
+            for i in reversed(range(self.config.unroll_step + 1)):
+                if i == (self.config.unroll_step):
+                    target[i, :, :] += learnerValue[i, :, :] * done
                 else:
                     td = (
                         reward[i, :, :]
@@ -176,16 +170,20 @@ class Learner:
                         * (target[i + 1, :, :] - learnerValue[i + 1, :, :])
                     )
             # target , batchSize, num+1, 1
-            Vtarget = target[0:1, :, 0].view(-1, 1)
-            ATarget = (reward[0:1, :, 0] + self.config.gamma * target[1:2, :, 0]).view(
+            Vtarget = target[:-1].view(-1, 1)
+            ATarget = (reward[:-1, :, 0] + self.config.gamma * target[1:, :, 0]).view(
                 -1, 1
             )
-            advantage = (ATarget - learnerValue[0, :, :]) * ps
+            ratio = learnerPolicy[:-1] / actorPolicy[:-1]
+            pt = torch.min(self.config.p_value, ratio)
+            pt = pt.view(-1, 1)
+            advantage = (ATarget - learnerValue[:-1, :, :].view(-1, 1)) * pt
+            trainState = state[:-1].view(-1, 4, 84, 84)
         objActor, criticLoss, entropy = self.calLoss(
             trainState.detach(),
             advantage.detach(),
             Vtarget.detach(),
-            trainAction.detach(),
+            action.detach(),
         )
         self.zeroGrad()
         loss = -objActor + criticLoss
@@ -206,7 +204,7 @@ class Learner:
                     rewardSum = 0
                     for r in _Reward:
                         rewardSum += loads(r)
-                    self.writer.add_scalar("Reward", rewardSum/len(_Reward), step)
+                    self.writer.add_scalar("Reward", rewardSum / len(_Reward), step)
                 self.writer.add_scalar("Objective of Actor", _objActor, step)
                 self.writer.add_scalar("Loss of Critic", _criticLoss, step)
                 self.writer.add_scalar("Entropy", _entropy, step)

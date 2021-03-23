@@ -13,7 +13,7 @@ from itertools import count
 from PIL import Image as im
 
 
-@ray.remote(num_gpus=0.05, memory=100 * 1024 * 1024, num_cpus=1)
+@ray.remote(num_gpus=0.02, memory=100 * 1024 * 1024, num_cpus=1)
 class Player:
     def __init__(self, config: IMPALAConfig, trainMode=True):
         self.trainMode = trainMode
