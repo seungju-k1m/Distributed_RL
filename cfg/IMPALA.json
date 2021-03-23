@@ -27,6 +27,7 @@
     "learnerDevice":"cuda:0",
     "actorDevice":"cpu",
     "hostName":"localhost",
+    "renderMode":false,
 
     "optim":{
         "actor-critic":{

@@ -165,7 +165,9 @@ class Player:
                 action, policy = self.getAction(nextState)
                 if self.trainMode:
                     self.localbuffer.append(reward)
-                self.env.render()
+                
+                if self.config.renderMode:
+                    self.env.render()
                 if self.trainMode is False:
                     time.sleep(0.01)
                 rewards += reward
