@@ -25,7 +25,7 @@
     "tPath":"./tensorboard/IMPALA/BreakOut-v4",
     "lPath":false,
     "learnerDevice":"cuda:0",
-    "actorDevice":"cpu",
+    "actorDevice":"cuda:0",
     "hostName":"localhost",
     "renderMode":false,
 

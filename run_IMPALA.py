@@ -69,6 +69,6 @@ if __name__ == "__main__":
     for i in range(NUMSIM):
         Networks.append(Player.remote(config, args.train))
 
-    # if args.train:
-    #     Networks.append(Learner.remote(config))
+    if args.train:
+        Networks.append(Learner.remote(config))
     ray.get([Network.run.remote() for Network in Networks])
