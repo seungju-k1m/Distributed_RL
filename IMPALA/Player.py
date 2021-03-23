@@ -35,7 +35,7 @@ class Player:
     def resetObsDeque(self, obs):
         grayObs = self.rgb_to_gray(obs)
         for i in range(self.config.stack):
-            self.obsDeque.append(grayObs)
+            self.obsDeque.append(grayObs.copy())
 
     @staticmethod
     def rgb_to_gray(img, W=84, H=84):

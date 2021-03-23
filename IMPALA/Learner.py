@@ -14,7 +14,7 @@ from baseline.baseAgent import baseAgent
 from torch.utils.tensorboard import SummaryWriter
 
 
-# @ray.remote(num_gpus=0.1, num_cpus=4)
+@ray.remote(num_gpus=0.1, num_cpus=4)
 class Learner:
     def __init__(self, cfg: IMPALAConfig):
         self.config = cfg
