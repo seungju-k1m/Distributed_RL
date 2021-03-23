@@ -57,7 +57,10 @@ class Learner:
         logit_policy = output[:, : self.config.actionSize]
         exp_policy = torch.exp(logit_policy)
         policy = exp_policy / exp_policy.sum(dim=1, keepdim=True)
-        ind = torch.arange(0, len(policy)).to(self.device) * 4 + actionBatch[:, 0]
+        ind = (
+            torch.arange(0, len(policy)).to(self.device) * self.config.actionSize
+            + actionBatch[:, 0]
+        )
         ind = ind.long()
         policy = policy.view(-1)
         policy = policy[ind]
@@ -74,7 +77,7 @@ class Learner:
         return torch.tensor(value, dtype=dtype).to(self.device)
 
     def calLoss(self, state, actionTarget, criticTarget, action):
-        action = action[:-1].view(-1, 1)
+        action = action.view(-1, 1)
         output = self.model.forward([state])[0]
         logit_policy = output[:, : self.config.actionSize]
         exp_policy = torch.exp(logit_policy)
@@ -82,7 +85,9 @@ class Learner:
         logProb = torch.log(policy)
         entropy = -torch.sum(policy * logProb, -1, keepdim=True)
         ind = (
-            torch.arange(0, self.config.batchSize * self.config.unroll_step).to(self.device)
+            torch.arange(0, self.config.batchSize * self.config.unroll_step).to(
+                self.device
+            )
             * self.config.actionSize
             + action[:, 0]
         )
@@ -99,86 +104,89 @@ class Learner:
         return objActor, criticLoss, torch.mean(entropy).detach()
 
     def train(self, transition, step):
-        """
-        cellstate, s, a, p, r s, a, p, r, ----, s, a, p, r, d
-        """
-        # state, action, reward, next_state, done = [], [], [], [], []
-
         t = time.time()
         for i in range(len(transition)):
             transition[i] = loads(transition[i])
         with torch.no_grad():
             transition = np.array(transition)
-            done = np.array([k for k in transition[:, -1]])
-            # seq, batch, data
 
             div = torch.tensor(255).float().to(self.device)
 
             state = self.totensor(np.array([k for k in transition[:, 0]]), torch.uint8)
             state = (state / div).permute(1, 0, 2, 3, 4).contiguous()
+
+            lastState = state[-1]
+            estimatedValue = self.model.forward([lastState])[0][:, -1:]
+            state = state[:-1]
+
             action = self.totensor(np.array([k for k in transition[:, 1]]))
             action = action.permute(1, 0, 2).contiguous()
             policy = self.totensor(np.array([k for k in transition[:, 2]]))
+
             policy = policy.permute(1, 0, 2).contiguous()
             reward = self.totensor(np.array([k for k in transition[:, 3]]))
             reward = reward.permute(1, 0).contiguous()
 
+            # seq, batch, data -> seq*batch, data
             stateBatch = state.view(-1, 4, 84, 84)
             actionBatch = action.view(-1, 1)
             actorPolicyBatch = policy.view(-1, 1)
-            done = self.totensor(done)
-            done = done.view(-1, 1)
+
             reward = reward.view(
-                self.config.unroll_step + 1, self.config.batchSize, 1
+                self.config.unroll_step, self.config.batchSize, 1
             )  # 256
 
             learnerPolicy, learnerValue = self.forward(stateBatch, actionBatch)
             # 20*32, 1, 20*32, 1
+
+            log_ratio = torch.log(learnerPolicy.view(-1, 1)) - torch.log(actorPolicyBatch)
             learnerPolicy = learnerPolicy.view(
-                self.config.unroll_step + 1, self.config.batchSize, 1
+                self.config.unroll_step, self.config.batchSize, 1
             )
             learnerValue = learnerValue.view(
-                self.config.unroll_step + 1, self.config.batchSize, 1
+                self.config.unroll_step, self.config.batchSize, 1
             )
-            target = (
-                torch.zeros((self.config.unroll_step + 1, self.config.batchSize, 1))
+            value_minus_target = (
+                torch.zeros((self.config.unroll_step, self.config.batchSize, 1))
                 .float()
                 .to(self.device)
             )
 
             actorPolicy = actorPolicyBatch.view(
-                self.config.unroll_step + 1, self.config.batchSize, 1
+                self.config.unroll_step, self.config.batchSize, 1
             )
 
-            for i in reversed(range(self.config.unroll_step + 1)):
-                if i == (self.config.unroll_step):
-                    target[i, :, :] += learnerValue[i, :, :]
+            ratio = torch.exp(log_ratio).view(
+                self.config.unroll_step, self.config.batchSize, 1
+            )
+
+            for i in reversed(range(self.config.unroll_step)):
+                if i == (self.config.unroll_step-1):
+                    pass
                 else:
                     td = (
                         reward[i, :, :]
                         + self.config.gamma * learnerValue[i + 1, :, :]
                         - learnerValue[i, :, :]
                     )
-                    ratio = learnerPolicy[i, :, :] / actorPolicy[i, :, :]
-                    cs = self.config.c_lambda * torch.min(self.config.c_value, ratio)
-                    ps = torch.min(self.config.p_value, ratio)
-                    target[i, :, :] += (
-                        learnerValue[i, :, :]
-                        + td * ps
-                        + self.config.gamma
-                        * cs
-                        * (target[i + 1, :, :] - learnerValue[i + 1, :, :])
+                    cliped_ratio = torch.min(self.config.c_value, ratio[i, :, :])
+                    cs = self.config.c_lambda * cliped_ratio
+                    value_minus_target[i, :, :] += (
+                        td * cliped_ratio
+                        + self.config.gamma * cs * value_minus_target[i + 1, :, :]
                     )
             # target , batchSize, num+1, 1
-            Vtarget = target[:-1].view(-1, 1)
-            ATarget = (reward[:-1, :, 0] + self.config.gamma * target[1:, :, 0]).view(
+            Vtarget = learnerPolicy + value_minus_target
+            nextVtarget = torch.cat((Vtarget, torch.unsqueeze(estimatedValue, 0)), dim=0)
+            nextVtarget = nextVtarget[1:]
+            ATarget = (reward + self.config.gamma * nextVtarget).view(
                 -1, 1
             )
-            ratio = learnerPolicy[:-1] / actorPolicy[:-1]
             pt = torch.min(self.config.p_value, ratio)
             pt = pt.view(-1, 1)
-            advantage = (ATarget - learnerValue[:-1, :, :].view(-1, 1)) * pt
-            trainState = state[:-1].view(-1, 4, 84, 84)
+            advantage = (ATarget - learnerValue.view(-1, 1)) * pt
+            trainState = state.view(-1, 4, 84, 84)
+            Vtarget = Vtarget.view(-1, 1)
         objActor, criticLoss, entropy = self.calLoss(
             trainState.detach(),
             advantage.detach(),

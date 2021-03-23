@@ -114,7 +114,7 @@ class Player:
         pT = []
         for i in range(4):
             pT.append([])
-        for i, data in enumerate(traj[:-1]):
+        for i, data in enumerate(traj):
             x = i % 4
             pT[x].append(data)
 
@@ -122,14 +122,12 @@ class Player:
         pT[1] = np.stack(pT[1], axis=0)  # action
         pT[2] = np.stack(pT[2], axis=0)  # policy
         pT[3] = np.stack(pT[3], axis=0)
-        pT.append(traj[-1])
 
         return pT
 
     def checkLength(self, current, past):
-        totalLength = 1 + 4 * (self.config.unroll_step + 1)
+        totalLength = 1 + 4 * (self.config.unroll_step)
         if len(current) != totalLength:
-
             curLength = len(current)
             pastLength = totalLength - curLength
             pastTrajectory = past[-pastLength - 1 : -1]
@@ -165,18 +163,15 @@ class Player:
                 action, policy = self.getAction(nextState)
                 if self.trainMode:
                     self.localbuffer.append(reward)
-                
+
                 if self.config.renderMode:
                     self.env.render()
                 if self.trainMode is False:
                     time.sleep(0.01)
                 rewards += reward
 
-                if (n == (self.config.unroll_step + 1) or done) and self.trainMode:
-                    if done is False:
-                        self.localbuffer.append(1)
-                    else:
-                        self.localbuffer.append(0)
+                if (n == (self.config.unroll_step) or done) and self.trainMode:
+                    self.localbuffer.append(nextState.copy())
                     self._connect.rpush(
                         "trajectory",
                         _pickle.dumps(self.checkLength(self.localbuffer, pastbuffer)),
