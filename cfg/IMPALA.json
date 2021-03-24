@@ -3,15 +3,16 @@
 
     "lstmMode":false,
 
-    "replayMemory":5000,
-    "startMemory":4999,
+    "replayMemory":10000,
+    "startMemory":9999,
+    "totalStep":1e6,
     "batchSize":32,
     "grayscale":true,
     "gamma":0.99,
     "c_lambda":1,
     "c_value":1.0,
     "p_value":1.0,
-    "EntropyRegularizer":0.01,
+    "EntropyRegularizer":0.001,
     "clipingGradientNorm":40,
     "stack":4,
     "actionSize":6,
@@ -21,7 +22,7 @@
 
     "sPath":"./save/IMPALA/",
     "writeTMode":true,
-    "tPath":"./tensorboard/IMPALA/Pong-v4",
+    "tPath":"./tensorboard/IMPALA/Breakout-v4",
     "lPath":false,
     "learnerDevice":"cuda:0",
     "actorDevice":"cpu",

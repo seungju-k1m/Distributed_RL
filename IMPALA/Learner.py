@@ -48,6 +48,8 @@ class Learner:
         for key, value in self.config.optim.items():
             if key == "actor-critic":
                 self.mOptim = getOptim(value, self.model.buildOptim())
+                self.lr = value["lr"]
+                self.step_delta = self.lr / self.config.totalStep
 
     def zeroGrad(self):
         self.mOptim.zero_grad()
@@ -56,8 +58,7 @@ class Learner:
         state: torch.tensor
         output = self.model.forward([state])[0]
         logit_policy = output[:, : self.config.actionSize]
-        exp_policy = torch.exp(logit_policy)
-        policy = exp_policy / exp_policy.sum(dim=-1, keepdim=True)
+        policy = torch.softmax(logit_policy, dim=-1)
         ind = (
             torch.arange(0, len(policy)).to(self.device) * self.config.actionSize
             + actionBatch[:, 0]
@@ -81,8 +82,7 @@ class Learner:
         action = action.view(-1, 1)
         output = self.model.forward([state])[0]
         logit_policy = output[:, : self.config.actionSize]
-        exp_policy = torch.exp(logit_policy)
-        policy = exp_policy / exp_policy.sum(dim=1, keepdim=True)
+        policy = torch.softmax(logit_policy, dim=-1)
         logProb = torch.log(policy)
         entropy = -torch.sum(policy * logProb, -1, keepdim=True)
         ind = (
@@ -95,12 +95,12 @@ class Learner:
         ind = ind.long()
         selectedLogProb = logProb.view(-1)[ind]
         selectedLogProb = selectedLogProb.view(-1, 1)
-        objActor = torch.mean(
+        objActor = torch.sum(
             selectedLogProb * actionTarget + self.config.EntropyRegularizer * entropy
         )
 
         value = output[:, -1]
-        criticLoss = torch.mean((value - criticTarget[:, 0]).pow(2)) / 2
+        criticLoss = torch.sum((value - criticTarget[:, 0]).pow(2)) / 2
 
         return objActor, criticLoss, torch.mean(entropy).detach()
 
@@ -130,7 +130,7 @@ class Learner:
             policy = self.totensor(np.array([k for k in transition[:, 2]]))
             policy = policy.permute(1, 0, 2).contiguous()
 
-            reward = self.totensor(np.array([k for k in transition[:, 3]]))
+            reward = self.totensor(np.array([k for k in transition[:, 3]]))  # 32, 20
             reward = reward.permute(1, 0).contiguous()
 
             reward = reward.view(
@@ -160,6 +160,12 @@ class Learner:
                 .to(self.device)
             )
 
+            a3c_target = (
+                torch.zeros((self.config.unroll_step, self.config.batchSize, 1))
+                .float()
+                .to(self.device)
+            )
+
             ratio = torch.exp(log_ratio).view(
                 self.config.unroll_step, self.config.batchSize, 1
             )
@@ -170,6 +176,9 @@ class Learner:
                         reward[i, :, :]
                         + self.config.gamma * estimatedValue
                         - learnerValue[i, :, :]
+                    )
+                    a3c_target[i, :, :] += (
+                        reward[i, :, :] + self.config.gamma * estimatedValue
                     )
                 else:
                     td = (
@@ -183,6 +192,9 @@ class Learner:
                         td * cliped_ratio
                         + self.config.gamma * cs * value_minus_target[i + 1, :, :]
                     )
+                    a3c_target[i, :, :] += (
+                        reward[i, :, :] + self.config.gamma * a3c_target[i + 1, :, :]
+                    )
             # target , batchSize, num+1, 1
             Vtarget = learnerValue + value_minus_target
             nextVtarget = torch.cat(
@@ -190,11 +202,18 @@ class Learner:
             )
             nextVtarget = nextVtarget[1:]
             ATarget = (reward + self.config.gamma * nextVtarget).view(-1, 1)
+            a3c_target = a3c_target.view(-1, 1)
             pt = torch.min(self.config.p_value, ratio)
             pt = pt.view(-1, 1)
+
             advantage = (ATarget - learnerValue.view(-1, 1)) * pt
+            # advantage = (a3c_target - learnerValue.view(-1, 1)) * pt
+
             trainState = state.view(-1, 4, 84, 84)
+
             Vtarget = Vtarget.view(-1, 1)
+            # Vtarget = a3c_target
+
         objActor, criticLoss, entropy = self.calLoss(
             trainState.detach(),
             advantage.detach(),
@@ -239,6 +258,9 @@ class Learner:
         self.model.clippingNorm(self.config.gradientNorm)
         self.mOptim.step()
         norm_gradient = self.model.calculateNorm().cpu().detach().numpy()
+
+        for g in self.mOptim.param_groups:
+            g["lr"] = self.lr - self.step_delta * step
 
         if self.tMode:
             self.writer.add_scalar("Norm of Gradient", norm_gradient, step)

@@ -42,7 +42,7 @@ class Player:
         grayImage = im.fromarray(img, mode="RGB").convert("L")
 
         # grayImage = np.expand_dims(Avg, -1)
-        grayImage = grayImage.resize((W, H), im.BILINEAR)
+        grayImage = grayImage.resize((W, H), im.NEAREST)
         grayImage = np.expand_dims(np.array(grayImage), 0)
 
         return np.uint8(grayImage)
@@ -56,8 +56,7 @@ class Player:
         state: torch.tensor
         output = self.model.forward([state])[0]
         logit_policy = output[:, : self.config.actionSize]
-        exp_policy = torch.exp(logit_policy)
-        policy = exp_policy / exp_policy.sum(dim=1)
+        policy = torch.softmax(logit_policy, dim=-1)
         dist = torch.distributions.categorical.Categorical(probs=policy)
         action = dist.sample()
         value = output[:, -1:]
@@ -147,10 +146,19 @@ class Player:
                 self.localbuffer.append(state.copy())
                 self.localbuffer.append(action.copy())
                 self.localbuffer.append(policy.copy())
-
+            live = -1
             while done is False:
-                nextobs, reward, done, _ = self.env.step(action)
-                _done = reward != 0
+                nextobs, reward, done, info = self.env.step(action)
+
+                if live == -1:
+                    live = info["ale.lives"]
+                if info["ale.lives"] != 0:
+                    _done = live != info["ale.lives"]
+                    if _done:
+                        live = info["ale.lives"]
+                else:
+                    _done = reward != 0
+
                 nextState = self.stackObs(nextobs)
                 step += 1
                 n += 1
@@ -167,7 +175,7 @@ class Player:
                     time.sleep(0.01)
                 rewards += reward
 
-                if (n == (self.config.unroll_step) or done) and self.trainMode:
+                if (n == (self.config.unroll_step) or _done) and self.trainMode:
                     self.localbuffer.append(nextState.copy())
                     if _done:
                         self.localbuffer.append(0)
@@ -188,6 +196,8 @@ class Player:
                     self.localbuffer.append(nextState.copy())
                     self.localbuffer.append(action.copy())
                     self.localbuffer.append(policy.copy())
+                else:
+                    self._connect.rpush("Reward", _pickle.dumps(reward))
 
             gc.collect()
 
@@ -201,5 +211,4 @@ class Player:
                         episode, step, rewards / 50
                     )
                 )
-                self._connect.rpush("Reward", _pickle.dumps(rewards / 50))
                 rewards = 0
