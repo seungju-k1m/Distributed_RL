@@ -115,8 +115,11 @@ class Learner:
             state = self.totensor(np.array([k for k in transition[:, 0]]), torch.uint8)
             state = (state / div).permute(1, 0, 2, 3, 4).contiguous()
 
+            done = self.totensor(np.array([k for k in transition[:, -1]]))
+            done = done.view(-1, 1)
+
             lastState = state[-1]
-            estimatedValue = self.model.forward([lastState])[0][:, -1:]
+            estimatedValue = self.model.forward([lastState])[0][:, -1:] * done
             state = state[:-1]
 
             action = self.totensor(np.array([k for k in transition[:, 1]]))
@@ -139,7 +142,9 @@ class Learner:
             learnerPolicy, learnerValue = self.forward(stateBatch, actionBatch)
             # 20*32, 1, 20*32, 1
 
-            log_ratio = torch.log(learnerPolicy.view(-1, 1)) - torch.log(actorPolicyBatch)
+            log_ratio = torch.log(learnerPolicy.view(-1, 1)) - torch.log(
+                actorPolicyBatch
+            )
             learnerPolicy = learnerPolicy.view(
                 self.config.unroll_step, self.config.batchSize, 1
             )
@@ -161,8 +166,11 @@ class Learner:
             )
 
             for i in reversed(range(self.config.unroll_step)):
-                if i == (self.config.unroll_step-1):
-                    pass
+                if i == (self.config.unroll_step - 1):
+                    value_minus_target[i, :, :] += (
+                        reward[i, :, :] * self.config.gamma * estimatedValue
+                        - learnerValue[i, :, :]
+                    )
                 else:
                     td = (
                         reward[i, :, :]
@@ -177,11 +185,11 @@ class Learner:
                     )
             # target , batchSize, num+1, 1
             Vtarget = learnerPolicy + value_minus_target
-            nextVtarget = torch.cat((Vtarget, torch.unsqueeze(estimatedValue, 0)), dim=0)
-            nextVtarget = nextVtarget[1:]
-            ATarget = (reward + self.config.gamma * nextVtarget).view(
-                -1, 1
+            nextVtarget = torch.cat(
+                (Vtarget, torch.unsqueeze(estimatedValue, 0)), dim=0
             )
+            nextVtarget = nextVtarget[1:]
+            ATarget = (reward + self.config.gamma * nextVtarget).view(-1, 1)
             pt = torch.min(self.config.p_value, ratio)
             pt = pt.view(-1, 1)
             advantage = (ATarget - learnerValue.view(-1, 1)) * pt
