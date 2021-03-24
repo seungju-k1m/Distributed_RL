@@ -164,7 +164,10 @@ class Player:
                 n += 1
                 action, policy = self.getAction(nextState)
                 if self.trainMode:
-                    self.localbuffer.append(reward)
+                    _reward = 0.3 * np.minimum(np.tanh(reward), 0) + 5.0 * np.maximum(
+                        np.tanh(reward), 0
+                    )
+                    self.localbuffer.append(_reward)
 
                 if self.config.renderMode:
                     self.env.render()

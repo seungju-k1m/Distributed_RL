@@ -6,7 +6,6 @@
     "replayMemory":1200,
     "startMemory":1199,
     "batchSize":32,
-    "RewardClipping":[-1, 1],
     "grayscale":true,
     "gamma":0.99,
     "c_lambda":0.997,
@@ -27,7 +26,7 @@
     "learnerDevice":"cuda:0",
     "actorDevice":"cuda:0",
     "hostName":"localhost",
-    "renderMode":false,
+    "renderMode":true,
 
     "optim":{
         "actor-critic":{
@@ -36,7 +35,6 @@
             "momentum":0,
             "eps":0.01
         }
-
     },
     "agent":{
         "actor-critic":{
