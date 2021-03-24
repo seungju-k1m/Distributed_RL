@@ -20,7 +20,7 @@
     "unroll_step":20,
     "gradientNorm":40,
 
-    "sPath":"./save/IMPALA/",
+    "sPath":"./save/IMPALA/Breakout.pth",
     "writeTMode":true,
     "tPath":"./tensorboard/IMPALA/Breakout-v4",
     "lPath":false,

@@ -1,6 +1,7 @@
 import gc
-import time
+import os
 import ray
+import time
 import redis
 import torch
 
@@ -35,6 +36,12 @@ class Learner:
         self.config.p_value = torch.tensor(self.config.p_value).float().to(self.device)
         self.div = torch.tensor(255).float().to(self.device)
         self.actorDevice = torch.device(self.config.actorDevice)
+
+        path = os.path.split(self.config.sPath)
+        path = os.path.join(*path[:-1])
+
+        if not os.path.isdir(path):
+            os.makedirs(path)
 
     def buildModel(self):
         for netName, data in self.config.agent.items():
@@ -287,3 +294,5 @@ class Learner:
             self._connect.set("params", dumps(self.state_dict()))
             self._connect.set("Count", dumps(t))
             # gc.collect()
+            if (t+1) % 100 == 0:
+                torch.save(self.model.state_dict(), self.config.sPath)
