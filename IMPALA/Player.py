@@ -158,6 +158,7 @@ class Player:
 
             while done is False:
                 nextobs, reward, done, _ = self.env.step(action)
+                _done = reward != 0
                 nextState = self.stackObs(nextobs)
                 step += 1
                 n += 1
@@ -173,7 +174,7 @@ class Player:
 
                 if (n == (self.config.unroll_step) or done) and self.trainMode:
                     self.localbuffer.append(nextState.copy())
-                    if done:
+                    if _done:
                         self.localbuffer.append(0)
                     else:
                         self.localbuffer.append(1)

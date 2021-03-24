@@ -168,7 +168,7 @@ class Learner:
             for i in reversed(range(self.config.unroll_step)):
                 if i == (self.config.unroll_step - 1):
                     value_minus_target[i, :, :] += (
-                        reward[i, :, :] * self.config.gamma * estimatedValue
+                        reward[i, :, :] + self.config.gamma * estimatedValue
                         - learnerValue[i, :, :]
                     )
                 else:
