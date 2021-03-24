@@ -96,7 +96,7 @@ class Player:
             if count is not None:
                 count = _pickle.loads(count)
             if self.countModel != count:
-                params = torch._load(params, map_location=self.device)
+                params = _pickle.loads(params)
                 self.model.load_state_dict(params[0])
                 self.countModel = count
 

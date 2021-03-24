@@ -3,8 +3,8 @@
 
     "lstmMode":false,
 
-    "replayMemory":6000,
-    "startMemory":5999,
+    "replayMemory":5000,
+    "startMemory":4999,
     "batchSize":128,
     "grayscale":true,
     "gamma":0.99,

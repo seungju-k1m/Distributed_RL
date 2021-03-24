@@ -14,7 +14,7 @@ from baseline.baseAgent import baseAgent
 from torch.utils.tensorboard import SummaryWriter
 
 
-@ray.remote(num_gpus=0.7, num_cpus=1)
+@ray.remote(num_cpus=1)
 class Learner:
     def __init__(self, cfg: IMPALAConfig):
         self.config = cfg
@@ -244,7 +244,7 @@ class Learner:
     def state_dict(self):
         
         weights = [
-            self.model.state_dict(),
+            {k: v.cpu() for k, v in self.model.state_dict().items()},
         ]
         
         return tuple(weights)
