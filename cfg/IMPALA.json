@@ -3,9 +3,9 @@
 
     "lstmMode":false,
 
-    "replayMemory":1200,
-    "startMemory":1199,
-    "batchSize":32,
+    "replayMemory":6000,
+    "startMemory":5999,
+    "batchSize":128,
     "grayscale":true,
     "gamma":0.99,
     "c_lambda":0.997,
@@ -24,9 +24,9 @@
     "tPath":"./tensorboard/IMPALA/Pong-v4",
     "lPath":false,
     "learnerDevice":"cuda:0",
-    "actorDevice":"cuda:0",
+    "actorDevice":"cpu",
     "hostName":"localhost",
-    "renderMode":true,
+    "renderMode":false,
 
     "optim":{
         "actor-critic":{

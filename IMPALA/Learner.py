@@ -14,7 +14,7 @@ from baseline.baseAgent import baseAgent
 from torch.utils.tensorboard import SummaryWriter
 
 
-# @ray.remote(num_gpus=0.1, num_cpus=4)
+@ray.remote(num_gpus=0.7, num_cpus=1)
 class Learner:
     def __init__(self, cfg: IMPALAConfig):
         self.config = cfg
@@ -34,6 +34,7 @@ class Learner:
         self.config.c_value = torch.tensor(self.config.c_value).float().to(self.device)
         self.config.p_value = torch.tensor(self.config.p_value).float().to(self.device)
         self.div = torch.tensor(255).float().to(self.device)
+        self.actorDevice = torch.device(self.config.actorDevice)
 
     def buildModel(self):
         for netName, data in self.config.agent.items():
@@ -241,9 +242,11 @@ class Learner:
             self.writer.add_scalar("Norm of Gradient", norm_gradient, step)
 
     def state_dict(self):
+        self.model.to(self.actorDevice)
         weights = [
             self.model.state_dict(),
         ]
+        self.model.to(self.device)
         return tuple(weights)
 
     def run(self):
