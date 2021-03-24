@@ -5,10 +5,10 @@
 
     "replayMemory":5000,
     "startMemory":4999,
-    "batchSize":128,
+    "batchSize":32,
     "grayscale":true,
     "gamma":0.99,
-    "c_lambda":0.997,
+    "c_lambda":1,
     "c_value":1.0,
     "p_value":1.0,
     "EntropyRegularizer":0.01,

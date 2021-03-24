@@ -39,17 +39,9 @@ class Player:
 
     @staticmethod
     def rgb_to_gray(img, W=84, H=84):
-        R = np.array(img[:, :, 0], dtype=np.float32)
-        G = np.array(img[:, :, 1], dtype=np.float32)
-        B = np.array(img[:, :, 2], dtype=np.float32)
+        grayImage = im.fromarray(img, mode="RGB").convert("L")
 
-        R = R * 0.299
-        G = G * 0.587
-        B = B * 0.114
-
-        grayImage = R + G + B
         # grayImage = np.expand_dims(Avg, -1)
-        grayImage = im.fromarray(grayImage, mode="F")
         grayImage = grayImage.resize((W, H), im.BILINEAR)
         grayImage = np.expand_dims(np.array(grayImage), 0)
 
@@ -164,10 +156,10 @@ class Player:
                 n += 1
                 action, policy = self.getAction(nextState)
                 if self.trainMode:
-                    _reward = 0.3 * np.minimum(np.tanh(reward), 0) + 5.0 * np.maximum(
-                        np.tanh(reward), 0
-                    )
-                    self.localbuffer.append(_reward)
+                    # _reward = 0.3 * np.minimum(np.tanh(reward), 0) + 5.0 * np.maximum(
+                    #     np.tanh(reward), 0
+                    # )
+                    self.localbuffer.append(reward)
 
                 if self.config.renderMode:
                     self.env.render()

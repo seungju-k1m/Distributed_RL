@@ -14,7 +14,7 @@ from baseline.baseAgent import baseAgent
 from torch.utils.tensorboard import SummaryWriter
 
 
-@ray.remote(num_cpus=1)
+@ray.remote(num_gpus=0.7, num_cpus=1)
 class Learner:
     def __init__(self, cfg: IMPALAConfig):
         self.config = cfg
@@ -57,7 +57,7 @@ class Learner:
         output = self.model.forward([state])[0]
         logit_policy = output[:, : self.config.actionSize]
         exp_policy = torch.exp(logit_policy)
-        policy = exp_policy / exp_policy.sum(dim=1, keepdim=True)
+        policy = exp_policy / exp_policy.sum(dim=-1, keepdim=True)
         ind = (
             torch.arange(0, len(policy)).to(self.device) * self.config.actionSize
             + actionBatch[:, 0]
@@ -126,20 +126,21 @@ class Learner:
 
             action = self.totensor(np.array([k for k in transition[:, 1]]))
             action = action.permute(1, 0, 2).contiguous()
-            policy = self.totensor(np.array([k for k in transition[:, 2]]))
 
+            policy = self.totensor(np.array([k for k in transition[:, 2]]))
             policy = policy.permute(1, 0, 2).contiguous()
+
             reward = self.totensor(np.array([k for k in transition[:, 3]]))
             reward = reward.permute(1, 0).contiguous()
+
+            reward = reward.view(
+                self.config.unroll_step, self.config.batchSize, 1
+            )  # 256
 
             # seq, batch, data -> seq*batch, data
             stateBatch = state.view(-1, 4, 84, 84)
             actionBatch = action.view(-1, 1)
             actorPolicyBatch = policy.view(-1, 1)
-
-            reward = reward.view(
-                self.config.unroll_step, self.config.batchSize, 1
-            )  # 256
 
             learnerPolicy, learnerValue = self.forward(stateBatch, actionBatch)
             # 20*32, 1, 20*32, 1
@@ -166,7 +167,8 @@ class Learner:
             for i in reversed(range(self.config.unroll_step)):
                 if i == (self.config.unroll_step - 1):
                     value_minus_target[i, :, :] += (
-                        reward[i, :, :] + self.config.gamma * estimatedValue
+                        reward[i, :, :]
+                        + self.config.gamma * estimatedValue
                         - learnerValue[i, :, :]
                     )
                 else:
@@ -235,18 +237,18 @@ class Learner:
 
     def step(self, step):
         self.model.clippingNorm(self.config.gradientNorm)
-        norm_gradient = self.model.calculateNorm().cpu().detach().numpy()
         self.mOptim.step()
+        norm_gradient = self.model.calculateNorm().cpu().detach().numpy()
 
         if self.tMode:
             self.writer.add_scalar("Norm of Gradient", norm_gradient, step)
 
     def state_dict(self):
-        
+
         weights = [
             {k: v.cpu() for k, v in self.model.state_dict().items()},
         ]
-        
+
         return tuple(weights)
 
     def run(self):
