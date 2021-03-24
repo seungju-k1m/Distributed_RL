@@ -14,7 +14,7 @@ from baseline.baseAgent import baseAgent
 from torch.utils.tensorboard import SummaryWriter
 
 
-@ray.remote(num_gpus=0.1, num_cpus=4)
+# @ray.remote(num_gpus=0.1, num_cpus=4)
 class Learner:
     def __init__(self, cfg: IMPALAConfig):
         self.config = cfg
@@ -112,6 +112,7 @@ class Learner:
 
             div = torch.tensor(255).float().to(self.device)
 
+            # batch, seq, img
             state = self.totensor(np.array([k for k in transition[:, 0]]), torch.uint8)
             state = (state / div).permute(1, 0, 2, 3, 4).contiguous()
 
@@ -157,10 +158,6 @@ class Learner:
                 .to(self.device)
             )
 
-            actorPolicy = actorPolicyBatch.view(
-                self.config.unroll_step, self.config.batchSize, 1
-            )
-
             ratio = torch.exp(log_ratio).view(
                 self.config.unroll_step, self.config.batchSize, 1
             )
@@ -184,7 +181,7 @@ class Learner:
                         + self.config.gamma * cs * value_minus_target[i + 1, :, :]
                     )
             # target , batchSize, num+1, 1
-            Vtarget = learnerPolicy + value_minus_target
+            Vtarget = learnerValue + value_minus_target
             nextVtarget = torch.cat(
                 (Vtarget, torch.unsqueeze(estimatedValue, 0)), dim=0
             )
@@ -211,6 +208,11 @@ class Learner:
                 _criticLoss = criticLoss.detach().cpu().numpy()
                 _entropy = entropy.detach().cpu().numpy()
 
+                _advantage = advantage.mean().detach().cpu().numpy()
+                _Vtarget = Vtarget.mean().detach().cpu().numpy()
+
+                _learnerValue = learnerValue.mean().detach().cpu().numpy()
+                _target_minus_value = value_minus_target.mean().detach().cpu().numpy()
                 reward_pip = self._connect.pipeline()
                 reward_pip.lrange("Reward", 0, -1)
                 reward_pip.ltrim("Reward", -1, 0)
@@ -224,6 +226,10 @@ class Learner:
                 self.writer.add_scalar("Objective of Actor", _objActor, step)
                 self.writer.add_scalar("Loss of Critic", _criticLoss, step)
                 self.writer.add_scalar("Entropy", _entropy, step)
+                self.writer.add_scalar("Advantage", _advantage, step)
+                self.writer.add_scalar("Target Value", _Vtarget, step)
+                self.writer.add_scalar("Value", _learnerValue, step)
+                self.writer.add_scalar("Target_minus_value", _target_minus_value, step)
                 self.writer.add_scalar("training_Time", time.time() - t, step)
 
     def step(self, step):

@@ -50,7 +50,7 @@ class Player:
         grayImage = R + G + B
         # grayImage = np.expand_dims(Avg, -1)
         grayImage = im.fromarray(grayImage, mode="F")
-        grayImage = grayImage.resize((W, H), im.NEAREST)
+        grayImage = grayImage.resize((W, H), im.BILINEAR)
         grayImage = np.expand_dims(np.array(grayImage), 0)
 
         return np.uint8(grayImage)
