@@ -242,11 +242,11 @@ class Learner:
             self.writer.add_scalar("Norm of Gradient", norm_gradient, step)
 
     def state_dict(self):
-        self.model.to(self.actorDevice)
+        
         weights = [
             self.model.state_dict(),
         ]
-        self.model.to(self.device)
+        
         return tuple(weights)
 
     def run(self):
