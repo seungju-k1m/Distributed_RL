@@ -20,9 +20,9 @@
     "unroll_step":20,
     "gradientNorm":40,
 
-    "sPath":"./save/IMPALA/Breakout.pth",
+    "sPath":"./save/IMPALA/Pong.pth",
     "writeTMode":true,
-    "tPath":"./tensorboard/IMPALA/Breakout-v4",
+    "tPath":"./tensorboard/IMPALA/Pong-v4",
     "lPath":false,
     "learnerDevice":"cuda:0",
     "actorDevice":"cpu",
