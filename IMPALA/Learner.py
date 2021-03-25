@@ -30,10 +30,22 @@ class Learner:
         self.tMode = self.config.writeTMode
         self.to()
         if self.tMode:
+            if os.path.isdir(self.config.tPath):
+                ind = np.random.randint(100)
+                self.config.tPath += str(ind)
             self.writer = SummaryWriter(self.config.tPath)
             info = writeTrainInfo(self.config.data)
             print(info)
             self.writer.add_text("configuration", info.info, 0)
+        
+        if os.path.isfile(self.config.sPath):
+            pathList = os.path.split(self.config.sPath)
+            savename = pathList[-1]
+            snameList = savename.split('.')
+            ind = np.random.randint(100)
+            name = snameList[0] + str(ind) + '.pth'
+            pathList[-1] = name
+            self.config.sPath = os.path.join(*pathList)
 
         self.config.c_value = torch.tensor(self.config.c_value).float().to(self.device)
         self.config.p_value = torch.tensor(self.config.p_value).float().to(self.device)
