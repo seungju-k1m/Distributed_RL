@@ -149,6 +149,8 @@ class Player:
             live = -1
             episode_reward = 0
             while done is False:
+                for i in range(self.config.skipFrame - 1):
+                    self.env.step(action)
                 nextobs, reward, done, info = self.env.step(action)
 
                 if live == -1:
