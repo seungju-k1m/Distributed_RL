@@ -31,6 +31,9 @@ class Learner:
         self.to()
         if self.tMode:
             self.writer = SummaryWriter(self.config.tPath)
+            info = writeTrainInfo(self.config.data)
+            print(info)
+            self.writer.add_text("configuration", info.info, 0)
 
         self.config.c_value = torch.tensor(self.config.c_value).float().to(self.device)
         self.config.p_value = torch.tensor(self.config.p_value).float().to(self.device)

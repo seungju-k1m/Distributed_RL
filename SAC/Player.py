@@ -10,7 +10,7 @@ from SAC.Config import SACConfig
 from baseline.baseAgent import baseAgent
 
 
-@ray.remote(num_gpus=0.05, memory=500 * 1024 * 1024, num_cpus=1)
+@ray.remote(num_cpus=1)
 class sacPlayer:
     def __init__(self, config: SACConfig, trainMode=True):
         self.trainMode = trainMode

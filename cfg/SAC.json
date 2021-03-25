@@ -8,9 +8,6 @@
     "actionSize":17,
     "fixedTemp":false,
     "tempValue":0.2,
-    "alpha":0.6,
-    "beta0":0.4,
-    "betaDecay":1000000,
     "variantMode":false,
 
     "replayMemory":1000e3,
@@ -18,9 +15,9 @@
     "rScaling":20,
     "sPath":"./save/SAC/SAC/Humanoid.pth",
     "writeTMode":true,
-    "tPath":"./tensorboard/SAC/Humanoid_0318",
+    "tPath":"./tensorboard/SAC/Humanoid_0325",
     "lPath":false,
-    "leanerDevice":"cpu",
+    "leanerDevice":"cuda:0",
     "actorDevice":"cpu",
     "hostName":"localhost",
 

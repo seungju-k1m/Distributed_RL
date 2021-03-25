@@ -65,9 +65,6 @@ if __name__ == "__main__":
 
     config = SACConfig(args.path)
 
-    # not instance
-    # remoteNetwork = ray.remote(sacPlayer)
-    # remoteNetwork.options(num_gpus=0.25)
     Networks = []
     for i in range(NUMSIM):
         Networks.append(sacPlayer.remote(config, args.train))

@@ -1,22 +1,21 @@
 import gc
 import os
-import time
 import ray
+import time
 import redis
 import torch
 
 import numpy as np
 
-from typing import Tuple
 from itertools import count
 from SAC.ReplayMemory import Replay
 from SAC.Config import SACConfig
-from baseline.utils import getOptim, dumps, loads
+from baseline.utils import getOptim, dumps, loads, writeTrainInfo
 from baseline.baseAgent import baseAgent
 from torch.utils.tensorboard import SummaryWriter
 
 
-@ray.remote(num_gpus=0.1, num_cpus=4)
+@ray.remote(num_gpus=0.5, num_cpus=1)
 class Learner:
     def __init__(self, cfg: SACConfig):
         self.config = cfg
@@ -27,7 +26,7 @@ class Learner:
 
         self._memory = Replay(self.config, connect=self._connect)
         self._memory.start()
-        
+
         self.tMode = self.config.writeTMode
         # self._connect.delete("sample")
         # self._connect.delete("Reward")
@@ -36,17 +35,17 @@ class Learner:
         self.to()
         if self.tMode:
             self.writer = SummaryWriter(self.config.tPath)
+            info = writeTrainInfo(self.config.data)
+            print(info)
+            self.writer.add_text("configuration", info.info, 0)
         self.sPath = self.config.sPath
         self.variantMode = self.config.variantMode
 
-        folder = ''
-        path_list = self.sPath.rsplit('/')
-        for i in range(len(path_list)-1):
-            folder += path_list[i] + '/'
-        folder = folder[:-1]
-        if os.path.exists(folder) is False:
-            os.mkdir(folder)
-            print("mkdir :", folder)
+        path = os.path.split(self.config.sPath)
+        path = os.path.join(*path[:-1])
+
+        if not os.path.isdir(path):
+            os.makedirs(path)
 
     def buildModel(self):
         for netName, data in self.config.agent.items():
@@ -62,9 +61,7 @@ class Learner:
             self.temperature = self.config.tempValue
 
         else:
-            self.temperature = torch.zeros(
-                1, requires_grad=True, device=self.device
-            )
+            self.temperature = torch.zeros(1, requires_grad=True, device=self.device)
 
     def to(self):
         self.actor.to(self.device)
@@ -135,7 +132,7 @@ class Learner:
             lossCritic2 = torch.mean((critic02 - target[1]).pow(2) / 2)
 
         return lossCritic1, lossCritic2
-    
+
     def calculateActor(self, state):
 
         # 2. Calculate the loss of Actor
@@ -219,14 +216,14 @@ class Learner:
             lossP, entropy = self.calculateActor(stateBatch)
             lossP.backward()
             self.aOptim.step()
-        
+
         else:
             lossP, lossT, entropy = self.calculateActor(stateBatch)
             lossP.backward()
             lossT.backward()
             self.aOptim.step()
             self.tOptim.step()
-        
+
         if self.tMode:
             with torch.no_grad():
                 _lossP = lossP.detach().cpu().numpy()
@@ -249,14 +246,14 @@ class Learner:
 
     def state_dict(self):
         weights = [
-            self.actor.state_dict(),
-            self.critic01.state_dict(),
-            self.critic02.state_dict(),
-            self.tCritic01.state_dict(),
-            self.tCritic02.state_dict(),
+            {k: v.cpu() for k, v in self.actor.state_dict().items()},
+            {k: v.cpu() for k, v in self.critic01.state_dict().items()},
+            {k: v.cpu() for k, v in self.critic02.state_dict().items()},
+            {k: v.cpu() for k, v in self.tCritic01.state_dict().items()},
+            {k: v.cpu() for k, v in self.tCritic02.state_dict().items()},
         ]
         if self.config.fixedTemp is False:
-            weights.append(self.temperature)
+            weights.append(self.temperature.cpu())
         return tuple(weights)
 
     def run(self):
@@ -274,13 +271,12 @@ class Learner:
             self._connect.set("params", dumps(self.state_dict()))
             self._connect.set("Count", dumps(t))
             if (t + 1) % 1000 == 0:
-                
                 gc.collect()
-                # torch.save(
-                #     {
-                #         "actor": self.actor.state_dict(),
-                #         "critic1": self.critic01.state_dict(),
-                #         "critic2": self.critic02.state_dict()
-                #     },
-                #     self.sPath
-                # )
+                torch.save(
+                    {
+                        "actor": self.actor.state_dict(),
+                        "critic1": self.critic01.state_dict(),
+                        "critic2": self.critic02.state_dict(),
+                    },
+                    self.sPath,
+                )
