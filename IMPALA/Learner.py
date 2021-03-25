@@ -265,9 +265,9 @@ class Learner:
                 self.writer.add_scalar("training_Time", time.time() - t, step)
 
     def step(self, step):
-        norm_gradient = self.model.clippingNorm(self.config.gradientNorm)
+        self.model.clippingNorm(self.config.gradientNorm)
         self.mOptim.step()
-        # norm_gradient = self.model.calculateNorm().cpu().detach().numpy()
+        norm_gradient = self.model.calculateNorm().cpu().detach().numpy()
 
         for g in self.mOptim.param_groups:
             g["lr"] = self.lr - self.step_delta * step
