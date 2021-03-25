@@ -10,7 +10,7 @@ import numpy as np
 from itertools import count
 from IMPALA.ReplayMemory import Replay
 from IMPALA.Config import IMPALAConfig
-from baseline.utils import getOptim, dumps, loads
+from baseline.utils import getOptim, dumps, loads, writeTrainInfo
 from baseline.baseAgent import baseAgent
 from torch.utils.tensorboard import SummaryWriter
 
