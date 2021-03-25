@@ -147,6 +147,7 @@ class Player:
                 self.localbuffer.append(action.copy())
                 self.localbuffer.append(policy.copy())
             live = -1
+            episode_reward = 0
             while done is False:
                 nextobs, reward, done, info = self.env.step(action)
 
@@ -173,7 +174,7 @@ class Player:
                     self.env.render()
                 if self.trainMode is False:
                     time.sleep(0.01)
-                rewards += reward
+                episode_reward += reward
 
                 if (n == (self.config.unroll_step) or _done) and self.trainMode:
                     self.localbuffer.append(nextState.copy())
@@ -197,7 +198,9 @@ class Player:
                     self.localbuffer.append(action.copy())
                     self.localbuffer.append(policy.copy())
                 else:
-                    self._connect.rpush("Reward", _pickle.dumps(reward))
+                    self._connect.rpush("Reward", _pickle.dumps(episode_reward))
+                    rewards += episode_reward
+                    episode_reward = 0
 
             gc.collect()
 
