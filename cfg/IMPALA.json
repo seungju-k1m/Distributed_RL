@@ -3,10 +3,10 @@
 
     "lstmMode":false,
 
-    "replayMemory":10000,
-    "startMemory":9999,
+    "replayMemory":1000,
+    "startMemory":999,
     "totalStep":1e6,
-    "batchSize":128,
+    "batchSize":512,
     "grayscale":true,
     "gamma":0.99,
     "c_lambda":1,
@@ -25,7 +25,7 @@
     "writeTMode":true,
     "tPath":"./tensorboard/IMPALA/PongNoSkip-v4",
     "lPath":false,
-    "learnerDevice":"cuda:0",
+    "learnerDevice":"cpu",
     "actorDevice":"cpu",
     "hostName":"localhost",
     "renderMode":false,

@@ -13,7 +13,7 @@ from itertools import count
 from PIL import Image as im
 
 
-@ray.remote(num_cpus=1)
+# @ray.remote(num_cpus=1)
 class Player:
     def __init__(self, config: IMPALAConfig, trainMode=True):
         self.trainMode = trainMode
@@ -107,6 +107,8 @@ class Player:
             pT.append([])
         for i, data in enumerate(traj[:-1]):
             x = i % 4
+            if x == 0:
+                data = data.reshape(-1)
             pT[x].append(data)
 
         pT[0] = np.stack(pT[0], axis=0)  # state

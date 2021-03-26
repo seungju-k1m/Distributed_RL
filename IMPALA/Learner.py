@@ -15,7 +15,7 @@ from baseline.baseAgent import baseAgent
 from torch.utils.tensorboard import SummaryWriter
 
 
-@ray.remote(num_gpus=0.7, num_cpus=1)
+# @ray.remote(num_cpus=1)
 class Learner:
     def __init__(self, cfg: IMPALAConfig):
         self.config = cfg
@@ -136,15 +136,12 @@ class Learner:
             div = torch.tensor(255).float().to(self.device)
 
             # batch, seq, img
-            state = self.totensor(np.array([k for k in transition[:, 0]]), torch.uint8)
-            state = (state / div).permute(1, 0, 2, 3, 4).contiguous()
+            # state = self.totensor(np.array([k for k in transition[:, 0]]), torch.uint8)
+            state = torch.stack([torch.tensor(k, dtype=torch.uint8).to(self.device) for k in transition[:, 0]], dim=1).float()
+            state /= div
 
             done = self.totensor(np.array([k for k in transition[:, -1]]))
             done = done.view(-1, 1)
-
-            lastState = state[-1]
-            estimatedValue = self.model.forward([lastState])[0][:, -1:] * done
-            state = state[:-1]
 
             action = self.totensor(np.array([k for k in transition[:, 1]]))
             action = action.permute(1, 0, 2).contiguous()
@@ -161,10 +158,16 @@ class Learner:
 
             # seq, batch, data -> seq*batch, data
             stateBatch = state.view(-1, 4, 84, 84)
+            lastState = stateBatch[-self.config.batchSize:]
+            stateBatch = stateBatch[:-self.config.batchSize]
+            estimatedValue = self.model.forward([lastState])[0][:, -1:] * done
+            state = state[:-1]
+
             actionBatch = action.view(-1, 1)
             actorPolicyBatch = policy.view(-1, 1)
 
             learnerPolicy, learnerValue = self.forward(stateBatch, actionBatch)
+
             # 20*32, 1, 20*32, 1
 
             log_ratio = torch.log(learnerPolicy.view(-1, 1)) - torch.log(
@@ -235,7 +238,6 @@ class Learner:
 
             Vtarget = Vtarget.view(-1, 1)
             # Vtarget = a3c_target
-
         objActor, criticLoss, entropy = self.calLoss(
             trainState.detach(),
             advantage.detach(),
