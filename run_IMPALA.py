@@ -55,7 +55,7 @@ if __name__ == "__main__":
 
     NUMSIM = args.num_worker
     if args.num_cpu == -1:
-        NUMCPU = os.cpu_count() * 2
+        NUMCPU = os.cpu_count()
     else:
         NUMCPU = args.num_cpu
     
@@ -64,7 +64,7 @@ if __name__ == "__main__":
         Learner = ray.remote(num_cpus=1)(Learner)
     else:
         Player = ray.remote(num_cpus=1)(Player)
-        Learner = ray.remote(num_cpus=1, num_gpus=0.7)(Learner)
+        Learner = ray.remote(num_cpus=4, num_gpus=0.7)(Learner)
 
     NUMGPU = args.num_gpu
 

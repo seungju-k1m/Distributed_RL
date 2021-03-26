@@ -37,13 +37,13 @@ class Learner:
             info = writeTrainInfo(self.config.data)
             print(info)
             self.writer.add_text("configuration", info.info, 0)
-        
+
         if os.path.isfile(self.config.sPath):
-            pathList = os.path.split(self.config.sPath)
+            pathList = list(os.path.split(self.config.sPath))
             savename = pathList[-1]
-            snameList = savename.split('.')
+            snameList = savename.split(".")
             ind = np.random.randint(100)
-            name = snameList[0] + str(ind) + '.pth'
+            name = snameList[0] + str(ind) + ".pth"
             pathList[-1] = name
             self.config.sPath = os.path.join(*pathList)
 
@@ -128,41 +128,28 @@ class Learner:
 
     def train(self, transition, step):
         t = time.time()
-        for i in range(len(transition)):
-            transition[i] = loads(transition[i])
         with torch.no_grad():
-            transition = np.array(transition)
-
             div = torch.tensor(255).float().to(self.device)
-
-            # batch, seq, img
-            # state = self.totensor(np.array([k for k in transition[:, 0]]), torch.uint8)
-            state = torch.stack([torch.tensor(k, dtype=torch.uint8).to(self.device) for k in transition[:, 0]], dim=1).float()
-            state /= div
-
-            done = self.totensor(np.array([k for k in transition[:, -1]]))
+            transition = list(
+                map(lambda x: torch.tensor(x).to(self.device), transition)
+            )
+            # print(time.time() - t)
+            stateBatch, action, policy, reward, done = transition
             done = done.view(-1, 1)
-
-            action = self.totensor(np.array([k for k in transition[:, 1]]))
-            action = action.permute(1, 0, 2).contiguous()
-
-            policy = self.totensor(np.array([k for k in transition[:, 2]]))
-            policy = policy.permute(1, 0, 2).contiguous()
-
-            reward = self.totensor(np.array([k for k in transition[:, 3]]))  # 32, 20
-            reward = reward.permute(1, 0).contiguous()
-
+            stateBatch = stateBatch.float()
+            stateBatch /= div
             reward = reward.view(
                 self.config.unroll_step, self.config.batchSize, 1
             )  # 256
+            
 
             # seq, batch, data -> seq*batch, data
-            stateBatch = state.view(-1, 4, 84, 84)
-            lastState = stateBatch[-self.config.batchSize:]
-            stateBatch = stateBatch[:-self.config.batchSize]
+            stateBatch = stateBatch.view(
+                self.config.unroll_step + 1, self.config.batchSize, 4, 84, 84
+            )
+            lastState = stateBatch[-1]
+            stateBatch = stateBatch[:-1].view(-1, 4, 84, 84)
             estimatedValue = self.model.forward([lastState])[0][:, -1:] * done
-            state = state[:-1]
-
             actionBatch = action.view(-1, 1)
             actorPolicyBatch = policy.view(-1, 1)
 
@@ -234,15 +221,13 @@ class Learner:
             advantage = (ATarget - learnerValue.view(-1, 1)) * pt
             # advantage = (a3c_target - learnerValue.view(-1, 1)) * pt
 
-            trainState = state.view(-1, 4, 84, 84)
-
             Vtarget = Vtarget.view(-1, 1)
             # Vtarget = a3c_target
         objActor, criticLoss, entropy = self.calLoss(
-            trainState.detach(),
+            stateBatch.detach(),
             advantage.detach(),
             Vtarget.detach(),
-            action.detach(),
+            actionBatch.detach(),
         )
         self.zeroGrad()
         loss = -objActor + criticLoss
@@ -291,9 +276,7 @@ class Learner:
 
     def state_dict(self):
 
-        weights = [
-            {k: v.cpu() for k, v in self.model.state_dict().items()}
-        ]
+        weights = [{k: v.cpu() for k, v in self.model.state_dict().items()}]
 
         return tuple(weights)
 
@@ -303,13 +286,12 @@ class Learner:
         BATCHSIZE = self.config.batchSize
 
         for t in count():
+            x = time.time()
             transitions = self._memory.sample(BATCHSIZE)
-
             self.zeroGrad()
-
             self.train(transitions, t)
             self._connect.set("params", dumps(self.state_dict()))
             self._connect.set("Count", dumps(t))
-            # gc.collect()
-            if (t+1) % 100 == 0:
+            print(time.time() - x)
+            if (t + 1) % 100 == 0:
                 torch.save(self.model.state_dict(), self.config.sPath)
