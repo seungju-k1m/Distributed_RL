@@ -3,8 +3,8 @@
 
     "lstmMode":false,
 
-    "replayMemory":8000,
-    "startMemory":7999,
+    "replayMemory":10000,
+    "startMemory":9999,
     "bufferSize":6,
     "totalStep":1e6,
     "batchSize":256,
