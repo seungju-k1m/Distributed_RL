@@ -141,7 +141,6 @@ class Learner:
             reward = reward.view(
                 self.config.unroll_step, self.config.batchSize, 1
             )  # 256
-            
 
             # seq, batch, data -> seq*batch, data
             stateBatch = stateBatch.view(
@@ -286,7 +285,7 @@ class Learner:
         BATCHSIZE = self.config.batchSize
 
         for t in count():
-            x = time.time()
+            # x = time.time()
             transitions = self._memory.sample(BATCHSIZE)
             if type(transitions) == bool:
                 time.sleep(0.2)
@@ -295,7 +294,7 @@ class Learner:
             self.train(transitions, t)
             self._connect.set("params", dumps(self.state_dict()))
             self._connect.set("Count", dumps(t))
-            #print(time.time() - x)
-            #time.sleep(0.05)
+            # print(time.time() - x)
+            # time.sleep(0.05)
             if (t + 1) % 100 == 0:
                 torch.save(self.model.state_dict(), self.config.sPath)

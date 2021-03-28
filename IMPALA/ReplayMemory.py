@@ -32,7 +32,7 @@ class Replay(threading.Thread):
         cond = len(self.obsDeque) != self.config.bufferSize
         if len(self.obsDeque) != self.config.bufferSize:
             # print('---------------------------')
-            t = time.time()
+            # t = time.time()
             # with self._lock:
             transition = self._memory.sample(self.config.batchSize)
             # print(time.time() - t)
@@ -55,7 +55,7 @@ class Replay(threading.Thread):
             if len(self._memory) > self.config.replayMemory * 0.8:
                 if len(self.obsDeque) <int(self.config.bufferSize):
                     cond = self.bufferSave()
-                    print(len(self.obsDeque))
+                    # print(len(self.obsDeque))
             t += 1
             pipe = self._connect.pipeline()
             pipe.lrange("trajectory", 0, -1)

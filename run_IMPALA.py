@@ -58,8 +58,8 @@ if __name__ == "__main__":
         NUMCPU = os.cpu_count()
     else:
         NUMCPU = args.num_cpu
-    
-    if args.num_gpu <1:
+
+    if args.num_gpu < 1:
         Player = ray.remote(num_cpus=1)(Player)
         Learner = ray.remote(num_cpus=1)(Learner)
     else:
