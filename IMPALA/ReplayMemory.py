@@ -53,9 +53,9 @@ class Replay(threading.Thread):
         t = 0
         while True:
             if len(self._memory) > self.config.replayMemory * 0.8:
-                cond = self.bufferSave()
-                while cond: 
+                if len(self.obsDeque) <int(self.config.bufferSize):
                     cond = self.bufferSave()
+                    print(len(self.obsDeque))
             t += 1
             pipe = self._connect.pipeline()
             pipe.lrange("trajectory", 0, -1)
@@ -70,9 +70,12 @@ class Replay(threading.Thread):
             gc.collect()
 
     def sample(self, batch_size):
-        while True:
-            if len(self.obsDeque) > 1:
-                break
+        cond = True
+        if len(self.obsDeque) > 3:
+            cond = True
+        else:
+            cond = False
+            return cond
         return self.obsDeque.pop()
 
     def __len__(self):
