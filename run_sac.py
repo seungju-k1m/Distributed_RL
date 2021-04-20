@@ -61,13 +61,16 @@ if __name__ == "__main__":
 
     NUMGPU = args.num_gpu
 
+    Player = ray.remote(num_cpus=1)(sacPlayer)
+    Learner = ray.remote(num_cpus=2, num_gpus=0.5)(Learner)
+
     ray.init(num_cpus=NUMCPU, num_gpus=NUMGPU)
 
     config = SACConfig(args.path)
 
     Networks = []
     for i in range(NUMSIM):
-        Networks.append(sacPlayer.remote(config, args.train))
+        Networks.append(Player.remote(config, args.train))
 
     if args.train:
         Networks.append(Learner.remote(config))

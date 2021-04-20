@@ -15,7 +15,7 @@ from baseline.baseAgent import baseAgent
 from torch.utils.tensorboard import SummaryWriter
 
 
-@ray.remote(num_gpus=0.5, num_cpus=1)
+# @ray.remote(num_gpus=0.5, num_cpus=1)
 class Learner:
     def __init__(self, cfg: SACConfig):
         self.config = cfg
@@ -209,18 +209,22 @@ class Learner:
         lossC1, lossC2 = self.calculateQ(stateBatch, minTarget, actionBatch)
         lossC1.backward()
         lossC2.backward()
+        # self.critic01.clippingNorm(5000)
+        # self.critic02.clippingNorm(5000)
         self.cOptim01.step()
         self.cOptim02.step()
 
         if self.config.fixedTemp:
             lossP, entropy = self.calculateActor(stateBatch)
             lossP.backward()
+            # self.actor.clippingNorm(5000)
             self.aOptim.step()
 
         else:
             lossP, lossT, entropy = self.calculateActor(stateBatch)
             lossP.backward()
             lossT.backward()
+            # self.actor.clippingNorm(500)
             self.aOptim.step()
             self.tOptim.step()
 
@@ -230,11 +234,13 @@ class Learner:
                 _lossC1 = lossC1.detach().cpu().numpy()
                 _entropy = entropy.mean().detach().cpu().numpy()
                 _Reward = self._connect.get("Reward")
-                _Reward = loads(_Reward)
+                if _Reward is not None:
+                    _Reward = loads(_Reward)
+                    self.writer.add_scalar("Reward", _Reward, step)
                 self.writer.add_scalar("Loss of Policy", _lossP, step)
                 self.writer.add_scalar("Loss of Critic", _lossC1, step)
                 self.writer.add_scalar("Entropy", _entropy, step)
-                self.writer.add_scalar("Reward", _Reward, step)
+                
                 if self.config.fixedTemp is False:
                     _temperature = self.temperature.exp().detach().cpu().numpy()
                     self.writer.add_scalar("Temperature", _temperature, step)

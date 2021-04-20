@@ -4,40 +4,36 @@
     "tau":0.005,
     "updateInterval":1000,
     "runStep":300e3,
-    "startStep":1e4,
+    "startStep":9999,
     "actionSize":17,
     "fixedTemp":false,
     "tempValue":0.2,
     "variantMode":false,
 
     "replayMemory":1000e3,
-    "batchSize":256,
+    "batchSize":512,
     "rScaling":20,
-    "sPath":"./save/SAC/SAC/Humanoid.pth",
+    "sPath":"./save/SAC/SAC/Humanoid0408.pth",
     "writeTMode":true,
-    "tPath":"./tensorboard/SAC/Humanoid_0325",
+    "tPath":"./tensorboard/SAC/Humanoid_0408_v0",
     "lPath":false,
     "leanerDevice":"cuda:0",
     "actorDevice":"cpu",
     "hostName":"localhost",
+    "renderMode":false,
 
     "optim":{
         "actor":{
             "name":"adam",
-            "lr":3e-4,
-            "eps":1e-7,
-            "decay":0
+            "lr":3e-4
         },
         "critic":{
             "name":"adam",
-            "lr":3e-4,
-            "eps":1e-7,
-            "decay":0
+            "lr":3e-4
         },
         "temperature":{
             "name":"adam",
-            "lr":3e-4,
-            "eps":1e-7
+            "lr":3e-4
         }
     },
     "agent":{

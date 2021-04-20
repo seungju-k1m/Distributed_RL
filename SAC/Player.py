@@ -10,7 +10,7 @@ from SAC.Config import SACConfig
 from baseline.baseAgent import baseAgent
 
 
-@ray.remote(num_cpus=1)
+# @ray.remote(num_cpus=1)
 class sacPlayer:
     def __init__(self, config: SACConfig, trainMode=True):
         self.trainMode = trainMode
@@ -139,7 +139,8 @@ class sacPlayer:
                     self._connect.rpush("sample", _pickle.dumps(sample))
 
                 state = nextState
-                self.env.render()
+                if self.config.renderMode:
+                    self.env.render()
                 if self.trainMode is False:
                     time.sleep(0.01)
                 action = self.getAction(state)
