@@ -15,6 +15,7 @@
                 "nUnit":[32, 64, 64],
                 "stride":[2, 2, 2],
                 "act":["relu", "relu", "relu"],
+                "padding":[0, 0, 0],
                 "BN":[false, false, false],
                 "linear":true,
                 "input":[0],
@@ -94,11 +95,12 @@
             "lr":3e-4
         }
     },
-    "replayMemory":10,
+    "replayMemory":50,
     "batchSize":4,
     "gradientNorm":100,
 
     "learnerDevice":"cpu",
+    "playerDevice":"cpu",
 
     "sPath":"./save/DDModel/v0.pth",
     "writeTMode":false,

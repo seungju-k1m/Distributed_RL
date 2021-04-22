@@ -19,6 +19,8 @@ class Replay(threading.Thread):
         self._lock = threading.Lock()
         self.device = torch.device(self._cfg.learnerDevice)
         self._buffer = deque(maxlen=12)
+        self._Horionz = int(self._cfg.env["horizonTime"] /
+                            self._cfg.env["timeStep"])
 
     def bufferSave(self):
         batch = random.sample(self._memory, self._cfg.batchSize)

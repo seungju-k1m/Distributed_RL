@@ -144,7 +144,13 @@ class Learner(LearnerTemp):
     def _calculateLoss(self, predEvents: torch.tensor, Events: torch.tensor) -> torch.tensor:
         pass
 
-    def _train(self, images: torch.tensor, actions: torch.tensor, events: torch.tensor, step: int) -> None:
+    def _train(
+        self,
+        images: torch.tensor,
+        actions: torch.tensor,
+        events: torch.tensor,
+        step: int
+    ) -> None:
         predEvents = self.player.forward(images, actions)
         loss = self._calculateLoss(predEvents, events)
         self._applyZeroGrad()
@@ -205,10 +211,14 @@ class Learner(LearnerTemp):
                 prevImage = image.copy()
                 prevCourse = courseActions.copy()
 
-            if len(self._replayMemory) < (self._cfg.replayMemory - 1):
+            if len(self._replayMemory) > (self._cfg.replayMemory - 2):
                 self.env.close()
                 break
-        print("Logging Data is Done!!")
+        # [TODO] : replayMemory를 저장해서 debugging할때 빠르게 할 수 있도록 하자
+        print("Data Sampling is Done!!")
+        print("--------------------------")
+        print("Training Starts~~")
+        print("--------------------------")
 
         step = 0
         replayMemory = Replay(self._cfg, self._replayMemory)
