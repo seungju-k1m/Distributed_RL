@@ -1,6 +1,4 @@
-import gc
 import os
-import ray
 import time
 import redis
 import torch

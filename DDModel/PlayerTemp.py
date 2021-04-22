@@ -1,5 +1,4 @@
 import torch
-import numpy as np
 
 import torchvision.transforms.functional as tfF
 
@@ -16,13 +15,16 @@ class PlayerTemp:
     def _buildModel(self):
         return NotImplementedError("build model for DDM")
 
+    def buildOptim(self):
+        return NotImplementedError("build optimizer for training")
+
     @staticmethod
     def pillowToTensor(image: Image):
         data = tfF.pil_to_tensor(image)
         return data
 
-    def forward(self, image: Image, vector: np.ndarray):
+    def forward(self, image: torch.tensor, course_Actions: torch.tensor):
         return NotImplementedError("Predict future events")
 
-    def _to(self):
+    def to(self):
         return NotImplementedError("Attach device to DDM")

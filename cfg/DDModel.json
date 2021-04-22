@@ -2,6 +2,110 @@
     "envName":"./Env/v0",
     "timeScale":1,
     "env":{
+        "timeStep":0.1,
+        "horizonTime":2.5
+    },
+    "agent":{
+        "Embedded":{
+            "module00":{
+                "netCat":"CNN2D",
+                "iSize":3,
+                "nLayer":4,
+                "fSize":[5, 3, 3, -1],
+                "nUnit":[32, 64, 64],
+                "stride":[2, 2, 2],
+                "act":["relu", "relu", "relu"],
+                "BN":[false, false, false],
+                "linear":true,
+                "input":[0],
+                "prior":0
+            },
+            "module01":{
+                "netCat":"MLP",
+                "iSize":9999,
+                "nLayer":4,
+                "fSize":[256, 256, 128, 128],
+                "act":["relu", "relu", "relu", "linear"],
+                "BN":false,
+                "prior":1,
+                "prevNodeNames":["module00"],
+                "output":true
+            }
+        },
+        "Output":{
+            "module00":{
+                "netCat":"MLP",
+                "iSize":2,
+                "nLayer":2,
+                "fSize":[16, 16],
+                "act":["relu", "linear"],
+                "prior":0,
+                "BN":false,
+                "input":[0]
+            },
+            "module01":{
+                "netCat":"View",
+                "shape":[1, -1, 16],
+                "prior":1,
+                "prevNodeNames":["module00"]
+            },
+            "module02":{
+                "netCat":"LSTMNET",
+                "iSize":16,
+                "nLayer":1,
+                "hiddenSize":128,
+                "FlattenMode":true,
+                "device":"cpu",
+                "prior":2,
+                "prevNodeNames":["module01"]
+            },
+            "module03":{
+                "netCat":"MLP",
+                "iSize":128,
+                "nLayer":2,
+                "fSize":[32, 2],
+                "act":["relu", "linear"],
+                "BN":false,
+                "prior":3,
+                "prevNodeNames":["module02"]
+            },
+            "module04":{
+                "netCat":"MLP",
+                "iSize":128,
+                "nLayer":2,
+                "fSize":[32, 1],
+                "act":["relu", "sigmoid"],
+                "BN":false,
+                "prior":3,
+                "prevNodeNames":["module02"]
+            },
+            "module05":{
+                "netCat":"Cat",
+                "prior":4,
+                "prevNodeNames":["module03", "module04"],
+                "output":true
+            }
 
-    }
+        }
+    },
+    "optim":{
+        "model":{
+            "name":"adam",
+            "lr":3e-4
+        }
+    },
+    "replayMemory":1e3,
+    "batchSize":4,
+    "gradientNorm":100,
+
+    "learnerDevice":"cpu",
+
+    "sPath":"./save/DDModel/v0.pth",
+    "writeTMode":false,
+    "tPath":"./tensorboard/DDModel/v0",
+
+    "GMP_theta":1.0,
+    "GMP_deltaT":0.2,
+    "GMP_drift":[0.1, 0],
+    "GMP_sigma":0.2
 }

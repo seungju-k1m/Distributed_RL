@@ -1,3 +1,4 @@
+import torch
 import numpy as np
 
 from PIL import Image
@@ -43,7 +44,22 @@ class LearnerTemp:
         width: 640, height: 480
         """)
 
-    def _append(self):
+    def _GMPStep(self, X):
+        return NotImplementedError("Gaussian Markov Process Stepping")
+
+    def _GMP(self):
+        return NotImplementedError("GMP")
+
+    def _calculateLoss(self, predEvents: torch.tensor, Events: torch.tensor):
+        return NotImplementedError("Calculate the loss")
+
+    def _train(self):
+        return NotImplementedError("Training")
+
+    def _step(self):
+        return NotImplementedError("Stepping")
+
+    def _append(self, data: tuple):
         return NotImplementedError("append samples to ReplayMemory")
 
     def run(self):

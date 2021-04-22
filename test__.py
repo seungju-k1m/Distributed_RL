@@ -1,17 +1,9 @@
-# from IMPALA.Learner import Learner
-# from IMPALA.Config import IMPALAConfig
+from DDModel.Learner import Learner
+from DDModel.Config import DDModelConfig
 
 
-# cfg = './cfg/IMPALA.json'
-# config = IMPALAConfig(cfg)
-# learner = Learner(config)
-# learner.run()
-
-from SAC.Player import sacPlayer
-from SAC.Config import SACConfig
-
-
-path = './cfg/SAC.json'
-
-player = sacPlayer(SACConfig(path), False)
-player.run()
+path = './cfg/DDModel.json'
+cfg = DDModelConfig(path)
+learner = Learner(cfg)
+# learner.GMP()
+learner.run()

@@ -1,5 +1,4 @@
 import gc
-import ray
 import gym
 import time
 import redis
@@ -13,7 +12,6 @@ from itertools import count
 from PIL import Image as im
 
 
-# @ray.remote(num_cpus=1)
 class Player:
     def __init__(self, config: IMPALAConfig, trainMode=True):
         self.trainMode = trainMode
@@ -124,7 +122,7 @@ class Player:
         if len(current) != totalLength:
             curLength = len(current)
             pastLength = totalLength - curLength
-            pastTrajectory = past[-pastLength - 2 : -2]
+            pastTrajectory = past[-pastLength - 2: -2]
             for ele in reversed(pastTrajectory):
                 current.insert(0, ele)
 
@@ -213,7 +211,7 @@ class Player:
             if (episode % 50) == 0:
                 print(
                     """
-                Episode:{} // Step:{} // Reward:{} 
+                Episode:{} // Step:{} // Reward:{}
                 """.format(
                         episode, step, rewards / 50
                     )
