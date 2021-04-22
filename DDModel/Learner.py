@@ -1,5 +1,4 @@
 import os
-import random
 import torch
 
 import numpy as np
@@ -12,6 +11,7 @@ from torch.utils.tensorboard import SummaryWriter
 from baseline.utils import writeTrainInfo
 
 from DDModel.Player import Player
+from DDModel.ReplayMemory import Replay
 from DDModel.LearnerTemp import LearnerTemp
 
 # Unity
@@ -52,6 +52,10 @@ class Learner(LearnerTemp):
             os.makedirs(path)
 
         self._replayMemory = deque(maxlen=int(self._cfg.replayMemory))
+        # self._replayMemory = ReplayMemory(int(self._cfg.replayMemory))
+        self._buildModel()
+        self._to()
+        self._buildOptim()
 
     def _buildEnv(self) -> None:
         id = np.random.randint(10, 1000, 1)[0]
@@ -140,34 +144,7 @@ class Learner(LearnerTemp):
     def _calculateLoss(self, predEvents: torch.tensor, Events: torch.tensor) -> torch.tensor:
         pass
 
-    def _train(self, step: int) -> None:
-        # step01. batching
-        batch = random.sample(self._replayMemory, self._cfg.batchSize)
-        images, vectors, actions = [], [], []
-
-        for i in range(self._cfg.batchSize):
-            images.append(batch[i][0])
-            vectors.append(batch[i][1])
-            actions.append(batch[i][2])
-
-        # step02. To Tensor
-
-        images = torch.tensor(images).float().to(self.device)
-        # ------------------------------------------------------ #
-        vectors = torch.tensor(vectors).float().to(self.device)
-        vector_pos = vectors[:, :self._Horizon*2]
-        vector_pos = vector_pos.view(self._cfg.batchSize, self._Horizon, 2)
-        vector_collision = vectors[:, self._Horizon*2:]
-        vector_collision = vector_collision.view(
-            self._cfg.batchSize, self._Horizon, 1)
-        actions = torch.tensor(actions).float().to(self.device)
-
-        # b, T -> S, b, -1
-        actions = actions.permute(1, 0, 2).contiguous()
-        vector_pos = vector_pos.permute(1, 0, 2).contiguous()
-        vector_collision = vector_collision.permute(1, 0, 2).contiguous()
-        events = torch.cat((vector_pos, vector_collision), dim=-1)
-        # ------------------------------------------------------ #
+    def _train(self, images: torch.tensor, actions: torch.tensor, events: torch.tensor, step: int) -> None:
         predEvents = self.player.forward(images, actions)
         loss = self._calculateLoss(predEvents, events)
         self._applyZeroGrad()
@@ -232,6 +209,10 @@ class Learner(LearnerTemp):
                 self.env.close()
                 break
         print("Logging Data is Done!!")
+
         step = 0
+        replayMemory = Replay(self._cfg, self._replayMemory)
+        replayMemory.start()
         for step in count():
-            self._train(step)
+            images, action, events = replayMemory.sample()
+            self._train(images, action, events, step)

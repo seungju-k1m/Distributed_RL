@@ -94,7 +94,7 @@
             "lr":3e-4
         }
     },
-    "replayMemory":1e3,
+    "replayMemory":10,
     "batchSize":4,
     "gradientNorm":100,
 
