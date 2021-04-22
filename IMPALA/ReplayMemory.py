@@ -6,7 +6,7 @@ import redis
 
 import numpy as np
 
-from baseline.utils import loads, ReplayMemory, loads
+from baseline.utils import loads, ReplayMemory
 from IMPALA.Config import IMPALAConfig
 from collections import deque
 
@@ -27,7 +27,7 @@ class Replay(threading.Thread):
         self._lock = threading.Lock()
         self.obsDeque = deque(maxlen=12)
         self.device = torch.device(self.config.learnerDevice)
-    
+
     def bufferSave(self):
         cond = len(self.obsDeque) != self.config.bufferSize
         if len(self.obsDeque) != self.config.bufferSize:
@@ -41,20 +41,20 @@ class Replay(threading.Thread):
             state = np.uint8(np.stack(transition[:, 0], axis=1))
             action = np.concatenate(transition[:, 1], axis=1)
             policy = np.concatenate(transition[:, 2], axis=1)
-            
+
             reward = np.stack(transition[:, 3], axis=1)
             done = np.float32(np.array(transition[:, 4]))
             self.obsDeque.append((state, action, policy, reward, done))
             # print(time.time() - t)
-            
+
         return cond
 
     def run(self):
         t = 0
         while True:
             if len(self._memory) > self.config.replayMemory * 0.8:
-                if len(self.obsDeque) <int(self.config.bufferSize):
-                    cond = self.bufferSave()
+                if len(self.obsDeque) < int(self.config.bufferSize):
+                    self.bufferSave()
                     # print(len(self.obsDeque))
             t += 1
             pipe = self._connect.pipeline()
@@ -66,7 +66,7 @@ class Replay(threading.Thread):
                 for d in data:
                     self._memory.push(d)
             time.sleep(0.01)
-            
+
             gc.collect()
 
     def sample(self, batch_size):
