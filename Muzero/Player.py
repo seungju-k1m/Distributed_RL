@@ -1,8 +1,9 @@
 import gym
+import random
 import torch
 
 import numpy as np
-from Muzero.Config import MuzeroConfig, Node
+from Muzero.Config import MuzeroConfig, Node, Game
 from baseline.baseAgent import baseAgent
 
 """
@@ -30,14 +31,14 @@ class Player:
     def _buildOptim(self) -> None:
         pass
 
-    def getHiddenState(self, obs: np.ndarray) -> torch.tensor:
+    def getHiddenState(self, obs) -> torch.tensor:
         # TODO
         # transform obs -> torch.tensor
-        return self._represent_fn.forward(obs)[0]
-    
+        return self._represent_fn.forward([obs])[0]
+
     def getPredict(self, hiddenState: torch.tensor):
         return self._predict_fn.forward([hiddenState])[0]
-    
+
     def _to(self) -> None:
         pass
 
@@ -45,18 +46,28 @@ class Player:
         pass
 
     def run_Game(self) -> None:
-        game = self._cfg.makeGame()
-        obs = self.env.reset()
         done = False
-        
+        game = self._cfg.makeGame()
+        self.env.reset()
+        action = int(random.random() * 18)
+        obs, reward, done, _ = self.env.step([action])
+        game.appendTraj(obs, action)
         while (done is False):
-            hiddenState = self.getHiddenState(obs)
-            policy, value = self.getPredict(hiddenState)
-            node = Node(policy)
-            self.run_MCTS(hiddenState, policy, node)
+            policy, value = self.run_MCTS(game)
 
-    def run_MCTS(self, hiddenState: torch.tensor, policy:torch.tensor, node: Node):
-
+    def selectAction(self, node: Node):
         pass
 
-
+    def run_MCTS(self, game: Game):
+        obsState = game.getObs()
+        obsState = obsState.to(self._device).detach()
+        initHiddenState = self.getHiddenState(obsState)
+        policy, _ = self.getPredict(initHiddenState)
+        startNode = Node(policy)
+        for i in range(self._cfg.MCTS_numSimul):
+            for j in range(self._cfg.MCTS_k):
+                action = startNode.selectAction(self._cfg.MCTS_c1, self._cfg.MCTS_c2)
+                
+                startNode.expandNode()
+                
+                

@@ -18,6 +18,7 @@
     "MCTS_c1":1.25,
     "MCTS_c2":19652,
     "MCTS_k":10,
+    "MCTS_numSimul":50,
 
     "_Description_training":true,
     "batchSize":32,
