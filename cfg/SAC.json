@@ -5,7 +5,7 @@
     "updateInterval":1000,
     "runStep":300e3,
     "startStep":9999,
-    "actionSize":17,
+    "actionSize":18,
     "fixedTemp":false,
     "tempValue":0.2,
     "variantMode":false,
