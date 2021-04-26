@@ -5,6 +5,7 @@ import torch
 # import numpy as np
 from Muzero.Config import MuzeroConfig, Node, Game
 from baseline.baseAgent import baseAgent
+from baseline.utils import getOptim
 
 """
 TODO:
@@ -17,6 +18,7 @@ class Player:
         self._cfg = cfg
         self._device = torch.device(self._cfg.actorDevice)
         self._buildModel()
+        self._buildOptim()
         self.env = gym.make(self._cfg.envName)
 
     def _buildModel(self) -> None:
@@ -29,7 +31,13 @@ class Player:
                 self._predict_fn = baseAgent(value)
 
     def _buildOptim(self) -> None:
-        pass
+        for key, value in self._cfg.optim:
+            if key == "represent_fn":
+                self._optim_rep = getOptim(value, self._represent_fn.buildOptim())
+            if key == "dynamic_fn":
+                self._optim_dyn = getOptim(value, self._dynamic_fn.buildOptim())
+            if key == "predict_fn":
+                self._optim_pre = getOptim(value, self._predict_fn.buildOptim())
 
     def getHiddenState(self, obs) -> torch.tensor:
         # TODO
@@ -49,8 +57,7 @@ class Player:
         dist = torch.softmax(dist, dim=-1)
         offset = torch.range(start=-300, end=300, step=1)
         x = torch.sum(dist * offset, dim=1)
-        return self.applyInverTransform(x)
-        
+        return self.applyInverTransform(x)    
 
     def applyRecurrent(self, hState: torch.tensor, action: int):
         actionPlane = torch.ones(1, 1, 6, 6) * action / 18
@@ -60,7 +67,6 @@ class Player:
         reward = self.dist2Reward(rewardDist)
         return nextHState, reward
         
-
     def _to(self) -> None:
         pass
 
@@ -75,7 +81,8 @@ class Player:
         obs, reward, done, _ = self.env.step([action])
         game.appendTraj(obs, action)
         while (done is False):
-            policy, value = self.run_MCTS(game)
+            node = self.run_MCTS(game)
+            node: Node
 
     def backupMCTS(self, node: Node, value: torch.tensor):
         initNode = node
