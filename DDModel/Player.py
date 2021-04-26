@@ -31,15 +31,19 @@ class Player(PlayerTemp):
     def forward(self, image: torch.tensor, courseActions: torch.tensor) -> torch.tensor:
         # image: b,c,h,w
         # courseActions: S, b, 2
+        self.Output.detachCellState()
         latent = self.Embedded.forward([image])[0]
         latent = torch.unsqueeze(latent, dim=0)
-        self.Output.setCellState((latent, latent))
+        hx, cx = latent[:, :, :64].contiguous(), latent[:, :, 64:].contiguous()
+        self.Output.setCellState((hx, cx))
 
         sequence = courseActions.shape[0]
         events = []
         for i in range(sequence):
             event = self.Output.forward([courseActions[i, :, :]])[0]
+
             events.append(event)
+        
         events = torch.cat(events, dim=0)
         return events
 

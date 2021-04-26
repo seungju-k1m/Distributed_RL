@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 """Configuration module for Muzero
 
@@ -123,7 +124,8 @@ class Node:
         if action in list(self._childNodes.keys()):
             return
         else:
-            cNode = Node(hiddenState, policy, reward=reward, parentNode=paraentNode)
+            cNode = Node(hiddenState, policy, reward=reward,
+                         parentNode=paraentNode)
             self._childNodes[action] = cNode
 
     def selectAction(self, c1, c2, actionNum=18):
@@ -143,12 +145,12 @@ class Node:
                 value + self._p[action] * rootTotalVisit /
                 (cVisit) + 1) * (c1 + math.log((totalVisit + c2 + 1)/c2))
             )
-        values = np.array(values)
-        action = np.argmax(values)[0]
+        values=np.array(values)
+        action=np.argmax(values)[0]
         return action
 
     def getTotalVisitCount(self):
-        output = 0
+        output=0
         for key in self._edges.keys():
             output += self._edges[key].visitCount
         return output
@@ -159,11 +161,11 @@ class Node:
 
 class Game:
     def __init__(self, cfg: MuzeroConfig):
-        self._cfg = cfg
-        self._traj = []
-        self._action = []
-        self._policy = []
-        self._value = []
+        self._cfg=cfg
+        self._traj=[]
+        self._action=[]
+        self._policy=[]
+        self._value=[]
 
     @ property
     def traj(self):
@@ -184,9 +186,9 @@ class Game:
     def appendAction(self, action: int):
         self._action.append(action)
 
-    def getObs(self, ind=-1) -> torch.tensor:
-        num_traj = len(self._traj)
-        obs = []
+    def getObs(self, ind = -1) -> torch.tensor:
+        num_traj=len(self._traj)
+        obs=[]
         for i in range(num_traj):
             obs.append(self._traj[-1 - i])
             obs.append(np.ones((1, 96, 96)) * self._action[-1-i] / 18)
@@ -196,5 +198,5 @@ class Game:
                 obs.append(self._traj[0])
                 obs.append(self.zeros((1, 96, 96)))
 
-        x = torch.tensor(obs).float()
+        x=torch.tensor(obs).float()
         return x

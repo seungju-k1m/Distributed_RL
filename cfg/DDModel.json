@@ -10,20 +10,20 @@
             "module00":{
                 "netCat":"CNN2D",
                 "iSize":3,
-                "nLayer":4,
-                "fSize":[5, 3, 3, -1],
-                "nUnit":[32, 64, 64],
-                "stride":[2, 2, 2],
-                "act":["relu", "relu", "relu"],
-                "padding":[0, 0, 0],
-                "BN":[false, false, false, false],
+                "nLayer":5,
+                "fSize":[5, 3, 3, 3, -1],
+                "nUnit":[32, 64, 64, 64],
+                "stride":[2, 2, 2, 2],
+                "act":["relu", "relu", "relu", "relu"],
+                "padding":[0, 0, 0, 0],
+                "BN":[false, false, false, false, false],
                 "linear":true,
                 "input":[0],
                 "prior":0
             },
             "module01":{
                 "netCat":"MLP",
-                "iSize":289536,
+                "iSize":68096,
                 "nLayer":4,
                 "fSize":[256, 256, 128, 128],
                 "act":["relu", "relu", "relu", "linear"],
@@ -54,7 +54,7 @@
                 "netCat":"LSTMNET",
                 "iSize":16,
                 "nLayer":1,
-                "hiddenSize":128,
+                "hiddenSize":64,
                 "FlattenMode":true,
                 "device":"cpu",
                 "prior":2,
@@ -62,9 +62,9 @@
             },
             "module03":{
                 "netCat":"MLP",
-                "iSize":128,
+                "iSize":64,
                 "nLayer":2,
-                "fSize":[32, 2],
+                "fSize":[64, 2],
                 "act":["relu", "linear"],
                 "BN":false,
                 "prior":3,
@@ -72,9 +72,9 @@
             },
             "module04":{
                 "netCat":"MLP",
-                "iSize":128,
+                "iSize":64,
                 "nLayer":2,
-                "fSize":[32, 1],
+                "fSize":[64, 1],
                 "act":["relu", "sigmoid"],
                 "BN":false,
                 "prior":3,
@@ -92,23 +92,24 @@
     "optim":{
         "model":{
             "name":"adam",
-            "lr":3e-4
+            "lr":1e-4,
+            "decay":0.01
         }
     },
     "replayMemory":2000,
-    "batchSize":2,
-    "gradientNorm":100,
+    "batchSize":32,
+    "gradientNorm":99999,
 
-    "learnerDevice":"cpu",
-    "playerDevice":"cpu",
+    "learnerDevice":"cuda:0",
+    "playerDevice":"cuda:0",
 
     "sPath":"./save/DDModel/v0.pth",
-    "writeTMode":false,
+    "writeTMode":true,
     "tPath":"./tensorboard/DDModel/v0",
     "dataPath":"./SampleData/",
 
     "GMP_theta":1.0,
-    "GMP_deltaT":0.2,
+    "GMP_deltaT":0.05,
     "GMP_drift":[0.1, 0],
-    "GMP_sigma":0.2
+    "GMP_sigma":0.1
 }
