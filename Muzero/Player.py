@@ -38,9 +38,28 @@ class Player:
 
     def getPredict(self, hiddenState: torch.tensor):
         return self._predict_fn.forward([hiddenState])[0]
+    
+    @staticmethod
+    def applyInvertTransform(self, x):
+        return torch.sign(x) * (torch.sqrt(torch.abs(x) + 1) - 1) + 0.001 * x
+        
+    @staticmethod
+    def dist2Reward(dist: torch.tensor):
+        # dist: bxN
+        dist = torch.softmax(dist, dim=-1)
+        offset = torch.range(start=-300, end=300, step=1)
+        x = torch.sum(dist * offset, dim=1)
+        return self.applyInverTransform(x)
+        
 
-    def applyRecurrent(self, hState, action):
-        pass
+    def applyRecurrent(self, hState: torch.tensor, action: int):
+        actionPlane = torch.ones(1, 1, 6, 6) * action / 18
+        actionPlane = actionPlane.float().to(self._device)
+        hAState = torch.cat((hState, actionPlane), dim=1)
+        nextHState, rewardDist = self._dynamic_fn.forward([hAState])
+        reward = self.dist2Reward(rewardDist)
+        return nextHState, reward
+        
 
     def _to(self) -> None:
         pass
@@ -58,34 +77,34 @@ class Player:
         while (done is False):
             policy, value = self.run_MCTS(game)
 
-    def selectAction(self, node: Node):
-        pass
-
-    def expansionNode(self):
-        pass
-
-    def backupMCTS(self):
-        pass
+    def backupMCTS(self, node: Node, value: torch.tensor):
+        initNode = node
+        for i in range(self._cfg.MCTS_k):
+            node.updateValue(value)
+            value = node.reward + self._cfg.gamma * value
+            node = node.parentNode
+        node = initNode
+        for i in range(self._cfg.MCTS_k):
+            node.updateVisitCount()
 
     def run_MCTS(self, game: Game):
         obsState = game.getObs()
         obsState = obsState.to(self._device).detach()
-        initHiddenState = self.getHiddenState(obsState)
-        policy, _ = self.getPredict(initHiddenState)
-        startNode = Node(initHiddenState, policy)
+        hiddenState = self.getHiddenState(obsState)
+        policy, _ = self.getPredict(hiddenState)
+        startNode = Node(hiddenState, policy)
         for i in range(self._cfg.MCTS_numSimul):
             node = startNode
             for j in range(self._cfg.MCTS_k):
                 action = node.selectAction(
                     self._cfg.MCTS_c1, self._cfg.MCTS_c2)
-                if node.checkExpansion(action):
-                    pass
+                if node.checkIsNode(action):
+                    hiddenState, reward = node.getHiddenState_Reward(action)
                 else:
                     hiddenState, reward = self.applyRecurrent(
-                        initHiddenState, action)
-                    policy, _ = self.getPredict(hiddenState)
-                    node.expandNode(action, reward, policy, hiddenState, node)
-                    node = node.getNode(action)
-            self.expansionNode()
-            self.backupMCTS()
+                        hiddenState, action)
+                policy, value = self.getPredict(hiddenState)
+                node.expandNode(action, reward, policy, hiddenState, node)
+                node = node.getNode(action)
+            self.backupMCTS(node, value)
         return startNode

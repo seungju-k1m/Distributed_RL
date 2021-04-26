@@ -102,18 +102,49 @@ class Node:
         self._visit = 0
         self._childNodes = {}
 
-    @ property
-    def VisitCount(self):
-        output = []
-        for key in self._edges.keys():
-            output.append(self._edges[key].visitCount)
-        return output
-
-    def checkExpansion(self, action):
+    def checkIsNode(self, action):
         if action in list(self._childNodes.keys()):
             return True
         else:
             return False
+    
+    @property
+    def visitCount(self):
+        return self._visit
+    
+    @property
+    def childVisitCount(self):
+        output = []
+        for key in list(self._childNodes.keys()):
+            output.append(self._childNodes[key].visitCount)
+        return output
+
+    @property
+    def hiddenState(self):
+        return self._hs
+    
+    @property
+    def reward(self):
+        return self._r
+
+    @property
+    def parentNode(self):
+        return self._parentNode
+
+    def getHiddenState_Reward(self, action):
+        node = self._childNodes[action]
+        return (node.hiddenState, node.reward)
+    
+    def updateValue(self, target):
+        self._v = (self._visit * self._v + target)/(self._visit + 1)
+
+    def addVisitCount(self):
+        self._visit += 1
+    
+    def updateVisitCount(self):
+        self._visit = 0
+        for key in self._childNodes.keys():
+            self._visit += self._childNodes[key].
 
     @ property
     def childNodes(self):
@@ -128,7 +159,7 @@ class Node:
                          parentNode=paraentNode)
             self._childNodes[action] = cNode
 
-    def selectAction(self, c1, c2, actionNum=18):
+    def selectAction(self, c1, c2, actionNum=18) -> int:
 
         values = []
         totalVisit = self.getTotalVisitCount()
