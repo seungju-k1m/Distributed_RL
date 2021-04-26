@@ -32,8 +32,9 @@ class Player(PlayerTemp):
         # image: b,c,h,w
         # courseActions: S, b, 2
         latent = self.Embedded.forward([image])[0]
-        latent = torch.unsqueeze(latent, dim=1)
+        latent = torch.unsqueeze(latent, dim=0)
         self.Output.setCellState((latent, latent))
+
         sequence = courseActions.shape[0]
         events = []
         for i in range(sequence):

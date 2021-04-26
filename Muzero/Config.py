@@ -90,47 +90,16 @@ class MuzeroConfig:
         return Game(self)
 
 
-class EdgeInfo:
-
-    def __init__(self, p: float, reward=0):
-        self._p = p
-        self._value = 0
-        self._visitCount = 0
-        self._reward = reward
-
-    @ property
-    def probability(self):
-        return self._p
-
-    @ property
-    def value(self):
-        return self._value
-
-    @ property
-    def visitCount(self):
-        return self._visitCount
-
-    @ property
-    def reward(self):
-        return self._reward
-
-    def updateValue(self, target: float):
-        self._value = (self._visitCount * self._value +
-                       target) / (self._visitCount + 1)
-
-    def updateReward(self, reward: float):
-        self._reward = reward
-
-    def visit(self):
-        self._visitCount += 1
-
-
 class Node:
-    def __init__(self, policy=None):
-        policy: np.ndarray
-        self._childNodes = {key: 0 for key in range(self._nAct)}
-        self._edges = {key: EdgeInfo(policy[key])
-                       for key in range(len(policy))}
+    def __init__(self, HiddenState, policy, value=0, reward=0, parentNode=None):
+        HiddenState: torch.tensor
+        self._parentNode = parentNode
+        self._hs = HiddenState.detach()
+        self._p = policy
+        self._v = value
+        self._r = reward
+        self._visit = 0
+        self._childNodes = {}
 
     @ property
     def VisitCount(self):
@@ -139,24 +108,40 @@ class Node:
             output.append(self._edges[key].visitCount)
         return output
 
+    def checkExpansion(self, action):
+        if action in list(self._childNodes.keys()):
+            return True
+        else:
+            return False
+
     @ property
     def childNodes(self):
         return self._childNodes
 
-    def expandNode(self, action: int, reward: float, policy: list):
-        if type(self._childNodes[action]) is not Node:
-            self._childNodes[action] = Node(policy)
-            self._edges[action].updateReward(reward)
+    def expandNode(self, action: int, reward: float, policy: list, hiddenState: torch.tensor, paraentNode=None):
 
-    def selectAction(self, c1, c2):
+        if action in list(self._childNodes.keys()):
+            return
+        else:
+            cNode = Node(hiddenState, policy, reward=reward, parentNode=paraentNode)
+            self._childNodes[action] = cNode
+
+    def selectAction(self, c1, c2, actionNum=18):
+
         values = []
         totalVisit = self.getTotalVisitCount()
         rootTotalVisit = math.pow(totalVisit, 0.5)
-        
-        for action in range(len(self._edges)):
-            edge = self._edges[action]
+        for action in range(actionNum):
+            if action in list(self._childNodes.keys()):
+                node = self._childNodes[action]
+                value = node.value
+                cVisit = node.getTotalVisitCount()
+            else:
+                value = 0
+                cVisit = 0
             values.append(
-                edge.value + edge.probability * rootTotalVisit / (edge.visitCount + 1) * (c1 + math.log((totalVisit + c2 + 1)/c2))
+                value + self._p[action] * rootTotalVisit /
+                (cVisit) + 1) * (c1 + math.log((totalVisit + c2 + 1)/c2))
             )
         values = np.array(values)
         action = np.argmax(values)[0]
@@ -167,6 +152,9 @@ class Node:
         for key in self._edges.keys():
             output += self._edges[key].visitCount
         return output
+
+    def getNode(self, action):
+        return self._childNodes[action]
 
 
 class Game:

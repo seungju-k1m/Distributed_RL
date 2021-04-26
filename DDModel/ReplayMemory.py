@@ -18,8 +18,8 @@ class Replay(threading.Thread):
         self._memory = replayMemory
         self._lock = threading.Lock()
         self.device = torch.device(self._cfg.learnerDevice)
-        self._buffer = deque(maxlen=12)
-        self._Horionz = int(self._cfg.env["horizonTime"] /
+        self._buffer = deque(maxlen=5)
+        self._Horizon = int(self._cfg.env["horizonTime"] /
                             self._cfg.env["timeStep"])
 
     def bufferSave(self):
@@ -54,12 +54,12 @@ class Replay(threading.Thread):
 
     def run(self):
         while True:
-            if len(self._buffer) < 10:
+            if len(self._buffer) < 3:
                 self.bufferSave()
 
     def sample(self):
-        while len(self._buffer) > 5:
-            time.wait(0.2)
+        while len(self._buffer) < 3:
+            time.sleep(0.2)
         return self._buffer.pop()
 
     def __len__(self):

@@ -1,7 +1,11 @@
+# 두가지 선택지가 존재
+# data를 저장한다
 import os
 import torch
 
 import numpy as np
+
+import _pickle as cPickle
 
 from PIL import Image
 from itertools import count
@@ -13,6 +17,7 @@ from baseline.utils import writeTrainInfo
 from DDModel.Player import Player
 from DDModel.ReplayMemory import Replay
 from DDModel.LearnerTemp import LearnerTemp
+
 
 # Unity
 from mlagents_envs.environment import UnityEnvironment
@@ -70,13 +75,16 @@ class Learner(LearnerTemp):
         self.env = UnityEnvironment(
             name,
             worker_id=id,
-            side_channels=[setChannel, engineChannel]
+            side_channels=[setChannel, engineChannel],
+            no_graphics=True
         )
         self.env.reset()
         # self.behaviroNames = list(self.env.behavior_specs._dict.keys())[0]
         self.behaviroNames = self.env.get_behavior_names()[0]
         self._Horizon = int(self._cfg.env["horizonTime"] /
                             self._cfg.env["timeStep"])
+                        
+        self._count = 0
 
     def _buildModel(self) -> None:
         self.player = Player(self._cfg)
@@ -173,7 +181,12 @@ class Learner(LearnerTemp):
             )
 
     def _append(self, data):
-        self._replayMemory.append(data)
+        # self._replayMemory.append(data)
+        with open(self._cfg.dataPath+str(self._count)+".bin", "wb") as f:
+            x = cPickle.dumps(data)
+            f.write(x)
+            f.close()
+        self._count += 1
 
     def _getObs(self):
         courseActions = self._GMP()
@@ -192,7 +205,13 @@ class Learner(LearnerTemp):
         # vector:125
         return (image, vector, courseActions, done)
 
-    def run(self):
+    @staticmethod
+    def permuteImage(x: np.array):
+        return np.transpose(x, (2, 0, 1))
+
+    def collectSamples(self):
+        print("--------------------------------")
+        print("Data Sampling starts!!")
         step = 0
         prevImage = None
         prevCourse = None
@@ -201,27 +220,35 @@ class Learner(LearnerTemp):
             image, vector, courseActions, init = self._getObs()
             if init:
                 if step % 2 == 0:
-                    prevImage = image.copy()
+                    prevImage = self.permuteImage(image.copy())
                     prevCourse = courseActions.copy()
                 else:
                     self._append((prevImage, vector, prevCourse))
                 step += 1
             else:
                 self._append((prevImage, vector, prevCourse))
-                prevImage = image.copy()
+                prevImage = self.permuteImage(image.copy())
                 prevCourse = courseActions.copy()
 
-            if len(self._replayMemory) > (self._cfg.replayMemory - 2):
+            if self._count > (self._cfg.replayMemory - 2):
                 self.env.close()
                 break
         # [TODO] : replayMemory를 저장해서 debugging할때 빠르게 할 수 있도록 하자
         print("Data Sampling is Done!!")
         print("--------------------------")
-        print("Training Starts~~")
-        print("--------------------------")
+        
 
-        step = 0
-        replayMemory = Replay(self._cfg, self._replayMemory)
+        # step = 0
+        # replayMemory = Replay(self._cfg, self._replayMemory)
+        # replayMemory.start()
+        # for step in count():
+        #     images, action, events = replayMemory.sample()
+        #     self._train(images, action, events, step)
+    
+    def run(self):
+        print("--------------------------")
+        print("Training Starts~~")
+        replayMemory = Replay(self._cfg)
         replayMemory.start()
         for step in count():
             images, action, events = replayMemory.sample()

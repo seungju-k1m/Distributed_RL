@@ -30,4 +30,4 @@ if __name__ == "__main__":
     cfg = DDModelConfig(path)
     learner = Learner(cfg)
     if args.train:
-        learner.run()
+        learner.collectSamples()

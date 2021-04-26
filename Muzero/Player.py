@@ -2,7 +2,7 @@ import gym
 import random
 import torch
 
-import numpy as np
+# import numpy as np
 from Muzero.Config import MuzeroConfig, Node, Game
 from baseline.baseAgent import baseAgent
 
@@ -34,10 +34,13 @@ class Player:
     def getHiddenState(self, obs) -> torch.tensor:
         # TODO
         # transform obs -> torch.tensor
-        return self._represent_fn.forward([obs])[0]
+        return self._represent_fn.forward([obs])
 
     def getPredict(self, hiddenState: torch.tensor):
         return self._predict_fn.forward([hiddenState])[0]
+
+    def applyRecurrent(self, hState, action):
+        pass
 
     def _to(self) -> None:
         pass
@@ -58,16 +61,31 @@ class Player:
     def selectAction(self, node: Node):
         pass
 
+    def expansionNode(self):
+        pass
+
+    def backupMCTS(self):
+        pass
+
     def run_MCTS(self, game: Game):
         obsState = game.getObs()
         obsState = obsState.to(self._device).detach()
         initHiddenState = self.getHiddenState(obsState)
         policy, _ = self.getPredict(initHiddenState)
-        startNode = Node(policy)
+        startNode = Node(initHiddenState, policy)
         for i in range(self._cfg.MCTS_numSimul):
+            node = startNode
             for j in range(self._cfg.MCTS_k):
-                action = startNode.selectAction(self._cfg.MCTS_c1, self._cfg.MCTS_c2)
-                
-                startNode.expandNode()
-                
-                
+                action = node.selectAction(
+                    self._cfg.MCTS_c1, self._cfg.MCTS_c2)
+                if node.checkExpansion(action):
+                    pass
+                else:
+                    hiddenState, reward = self.applyRecurrent(
+                        initHiddenState, action)
+                    policy, _ = self.getPredict(hiddenState)
+                    node.expandNode(action, reward, policy, hiddenState, node)
+                    node = node.getNode(action)
+            self.expansionNode()
+            self.backupMCTS()
+        return startNode

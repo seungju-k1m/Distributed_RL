@@ -1,6 +1,6 @@
 {
     "envName":"./Env/v0",
-    "timeScale":1,
+    "timeScale":10,
     "env":{
         "timeStep":0.1,
         "horizonTime":2.5
@@ -16,14 +16,14 @@
                 "stride":[2, 2, 2],
                 "act":["relu", "relu", "relu"],
                 "padding":[0, 0, 0],
-                "BN":[false, false, false],
+                "BN":[false, false, false, false],
                 "linear":true,
                 "input":[0],
                 "prior":0
             },
             "module01":{
                 "netCat":"MLP",
-                "iSize":9999,
+                "iSize":289536,
                 "nLayer":4,
                 "fSize":[256, 256, 128, 128],
                 "act":["relu", "relu", "relu", "linear"],
@@ -95,8 +95,8 @@
             "lr":3e-4
         }
     },
-    "replayMemory":50,
-    "batchSize":4,
+    "replayMemory":2000,
+    "batchSize":2,
     "gradientNorm":100,
 
     "learnerDevice":"cpu",
@@ -105,6 +105,7 @@
     "sPath":"./save/DDModel/v0.pth",
     "writeTMode":false,
     "tPath":"./tensorboard/DDModel/v0",
+    "dataPath":"./SampleData/",
 
     "GMP_theta":1.0,
     "GMP_deltaT":0.2,
