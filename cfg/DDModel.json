@@ -1,8 +1,8 @@
 {
     "envName":"./Env/v0",
-    "timeScale":10,
+    "timeScale":1,
     "env":{
-        "timeStep":0.1,
+        "timeStep":0.2,
         "horizonTime":2.5
     },
     "agent":{
@@ -108,8 +108,12 @@
     "tPath":"./tensorboard/DDModel/v0",
     "dataPath":"./SampleData/",
 
-    "GMP_theta":1.0,
+    "GMP_theta":0.5,
     "GMP_deltaT":0.05,
-    "GMP_drift":[0.1, 0],
-    "GMP_sigma":0.1
+    "GMP_drift":[0.07, 0],
+    "GMP_sigma":0.03,
+
+    "GMP_yaw_theta":1.0,
+    "GMP_yaw_deltaT":0.1,
+    "GMP_yaw_sigma":0.1
 }

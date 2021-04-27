@@ -29,6 +29,7 @@ if __name__ == "__main__":
     path = args.path
     cfg = DDModelConfig(path)
     learner = Learner(cfg)
+    learner.GMP()
     if args.train:
-        learner.run()
-        # learner.collectSamples()
+        # learner.run()
+        learner.collectSamples()

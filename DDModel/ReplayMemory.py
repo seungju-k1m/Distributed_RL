@@ -23,7 +23,7 @@ class Replay(threading.Thread):
         self._Horizon = int(self._cfg.env["horizonTime"] /
                             self._cfg.env["timeStep"])
 
-        self._name = os.listdir(self._cfg.dataPath)
+        self._name = os.listdir(self._cfg.dataPath+'/Image')
         self._name: list
         f = lambda x: self._cfg.dataPath + x
         self._name = list(map(f, self._name))
