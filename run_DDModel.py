@@ -31,3 +31,4 @@ if __name__ == "__main__":
     learner = Learner(cfg)
     if args.train:
         learner.run()
+        # learner.collectSamples()

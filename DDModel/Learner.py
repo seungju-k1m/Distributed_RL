@@ -213,13 +213,11 @@ class Learner(LearnerTemp):
     ) -> None:
         predEvents = self.player.forward(images, actions)
         lossPos, lossCol = self._calculateLoss(predEvents, events)
-        loss = lossPos + lossCol
-        # loss = lossCol
+        # loss = lossPos + lossCol
+        loss = lossCol
         self._applyZeroGrad()
         loss.backward()
         self._step(step)
-        # [TODO] logging
-
         if self._tMode:
             with torch.no_grad():
                 _Loss_Pos = lossPos.detach().cpu().numpy()

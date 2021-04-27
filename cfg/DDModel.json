@@ -10,20 +10,20 @@
             "module00":{
                 "netCat":"CNN2D",
                 "iSize":3,
-                "nLayer":5,
-                "fSize":[5, 3, 3, 3, -1],
-                "nUnit":[32, 64, 64, 64],
-                "stride":[2, 2, 2, 2],
-                "act":["relu", "relu", "relu", "relu"],
-                "padding":[0, 0, 0, 0],
-                "BN":[false, false, false, false, false],
+                "nLayer":4,
+                "fSize":[5, 3, 3, 3, 3, -1],
+                "nUnit":[32, 64, 64,64 ,64],
+                "stride":[2, 2, 2,2,2],
+                "act":["relu", "relu","relu","relu","relu"],
+                "padding":[0, 0, 0,0,0],
+                "BN":[false, false, false, false,false,false],
                 "linear":true,
                 "input":[0],
                 "prior":0
             },
             "module01":{
                 "netCat":"MLP",
-                "iSize":68096,
+                "iSize":14976,
                 "nLayer":4,
                 "fSize":[256, 256, 128, 128],
                 "act":["relu", "relu", "relu", "linear"],
@@ -93,10 +93,10 @@
         "model":{
             "name":"adam",
             "lr":1e-4,
-            "decay":0.01
+            "decay":0.0001
         }
     },
-    "replayMemory":2000,
+    "replayMemory":10000,
     "batchSize":32,
     "gradientNorm":99999,
 
