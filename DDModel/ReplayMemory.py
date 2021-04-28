@@ -24,18 +24,15 @@ class Replay(threading.Thread):
                             self._cfg.env["timeStep"])
 
         self._imgName = os.listdir(self._cfg.dataPath+'/Image')
-        self._vecName = os.listdir(self._cfg.dataPath+'/Vector')
         self._imgName.sort()
-        self._vecName.sort()
         for i in range(self._Horizon + 1):
             self._imgName.pop()
-            self._vecName.pop()
 
-        fI = lambda x: self._cfg.dataPath + 'Image/' + x
-        fV = lambda x: self._cfg.dataPath + 'Vector/' + x
+        def fI(x): return self._cfg.dataPath + 'Image/' + x
         self._imgName = list(map(fI, self._imgName))
-        self._vecName = list(map(fV, self._vecName))
-        self._numData = len(self._vecName)
+        self._rImgName = self._imgName.copy()
+        random.shuffle(self._rImgName)
+        self._numData = len(self._imgName)
         print("hello")
 
     @staticmethod
@@ -46,7 +43,13 @@ class Replay(threading.Thread):
         return '%06d' % numValue + '.bin'
 
     def bufferSave(self):
-        batch_path = random.sample(self._imgName, self._cfg.batchSize)
+        batch_path = []
+        z = time.time()
+        if len(self._rImgName) < (self._cfg.batchSize+3):
+            self._rImgName = self._imgName.copy()
+            random.shuffle(self._rImgName)
+        for _ in range(self._cfg.batchSize):
+            batch_path.append(self._rImgName.pop())
         name = []
         images, vectors, actions, masks = [], [], [], []
         for path in batch_path:
@@ -63,7 +66,6 @@ class Replay(threading.Thread):
                 with open(path_vec, "rb") as f:
                     x = f.read()
                     y = loads(x)
-                    vectors.append(y[0])
                     actions.append(y[1])
                     if y[0][-1] == 0 and collisionBool:
                         masks.append(True)
@@ -71,7 +73,10 @@ class Replay(threading.Thread):
                         masks.append(True)
                         collisionBool = False
                     else:
-                        masks.append(False)
+                        y[0][-1] = 1
+                        masks.append(True)
+                        # masks.append(False)
+                    vectors.append(y[0])
                     f.close()
                 _path[-1] = self.addString(_path[-1])
 
@@ -86,13 +91,14 @@ class Replay(threading.Thread):
             actions = actions.view(self._cfg.batchSize, self._Horizon, 2)
             masks = torch.tensor(masks).to(self.device)
             masks = masks.view(self._cfg.batchSize, self._Horizon, 1)
- 
+
             actions = actions.permute(1, 0, 2).contiguous()
             vectors = vectors.permute(1, 0, 2).contiguous()
             masks = masks.permute(1, 0, 2).contiguous()
 
         self._buffer.append((images, actions, vectors, masks))
         gc.collect()
+        print(time.time() - z)
 
     def run(self):
         while True:

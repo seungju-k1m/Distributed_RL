@@ -10,20 +10,20 @@
             "module00":{
                 "netCat":"CNN2D",
                 "iSize":3,
-                "nLayer":4,
-                "fSize":[5, 3, 3, 3, 3, -1],
-                "nUnit":[32, 64, 64,64 ,64],
-                "stride":[2, 2, 2,2,2],
-                "act":["relu", "relu","relu","relu","relu"],
-                "padding":[0, 0, 0,0,0],
-                "BN":[false, false, false, false,false,false],
+                "nLayer":3,
+                "fSize":[5, 3, 3, -1],
+                "nUnit":[32, 64, 64],
+                "stride":[2, 2, 2,2],
+                "act":["relu", "relu","relu"],
+                "padding":[0, 0, 0,0],
+                "BN":[false, false, false,false],
                 "linear":true,
                 "input":[0],
                 "prior":0
             },
             "module01":{
                 "netCat":"MLP",
-                "iSize":14976,
+                "iSize":289536,
                 "nLayer":4,
                 "fSize":[256, 256, 128, 128],
                 "act":["relu", "relu", "relu", "linear"],
@@ -93,18 +93,18 @@
         "model":{
             "name":"adam",
             "lr":1e-4,
-            "decay":0.0001
+            "decay":0.001
         }
     },
     "replayMemory":100000,
     "batchSize":32,
-    "gradientNorm":99999,
+    "gradientNorm":1000000,
 
     "learnerDevice":"cuda:0",
     "playerDevice":"cuda:0",
 
     "sPath":"./save/DDModel/v0.pth",
-    "writeTMode":true,
+    "writeTMode":false,
     "tPath":"./tensorboard/DDModel/v0",
     "dataPath":"./SampleData/",
 

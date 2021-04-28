@@ -6,9 +6,26 @@ This module supports for training accroding to BADGR Algorithm.
 [https://arxiv.org/abs/2002.05700]
 
 Unity Environment
-    Example:
+    Explain:
         The process of sending data to Python-API is not intuitive so you might take care about it.
         I assume that you have read BADGR algorithm paper written by G.Kan.
+        Specification for Unity simulator can be made throughout Python-API.
+        You can adjust time step between horizons.
+
+Deep Dynamic Model Algorithm
+    Explain:
+        The algorithm consists of two phase, data collecting and learning using by these data.
+        During First Phase, we sample image, vector information and action and then save them in./SampleData.
+        To reduce usage of storage, pickling data, which converts python-object into binary data, is used.
+        In /SampleData/Image, only image data are pickled then saved.
+        In /SampledData/Vector, vector information, such as position, yaw angle, collision, and action are saved in tuple.
+
+        if the sampling is done, learning algorithm would start.
+        
+        if the valid length of sequence data are shorter than horizon time, the training algorithm have a problem.
+        In the training, Concept of mask can utilize only valid data while maintaing data shape.
+
+
 """
 import os
 import torch
