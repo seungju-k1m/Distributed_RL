@@ -23,46 +23,75 @@ class Replay(threading.Thread):
         self._Horizon = int(self._cfg.env["horizonTime"] /
                             self._cfg.env["timeStep"])
 
-        self._name = os.listdir(self._cfg.dataPath+'/Image')
-        self._name: list
-        f = lambda x: self._cfg.dataPath + x
-        self._name = list(map(f, self._name))
+        self._imgName = os.listdir(self._cfg.dataPath+'/Image')
+        self._vecName = os.listdir(self._cfg.dataPath+'/Vector')
+        self._imgName.sort()
+        self._vecName.sort()
+        for i in range(self._Horizon + 1):
+            self._imgName.pop()
+            self._vecName.pop()
+
+        fI = lambda x: self._cfg.dataPath + 'Image/' + x
+        fV = lambda x: self._cfg.dataPath + 'Vector/' + x
+        self._imgName = list(map(fI, self._imgName))
+        self._vecName = list(map(fV, self._vecName))
+        self._numData = len(self._vecName)
         print("hello")
 
+    @staticmethod
+    def addString(stringData: str):
+        # stringData: '000001.bin'
+        splitX = stringData.split('.')
+        numValue = int(splitX[0]) + 1
+        return '%06d' % numValue + '.bin'
+
     def bufferSave(self):
-        batch_path = random.sample(self._name, self._cfg.batchSize)
-        batch = []
+        batch_path = random.sample(self._imgName, self._cfg.batchSize)
+        name = []
+        images, vectors, actions, masks = [], [], [], []
         for path in batch_path:
             with open(path, "rb") as f:
                 x = f.read()
-                batch.append(loads(x))
+                images.append(loads(x))
                 f.close()
-        images, vectors, actions = [], [], []
-
-        for i in range(self._cfg.batchSize):
-            images.append(batch[i][0])
-            vectors.append(batch[i][1])
-            actions.append(batch[i][2])
+            _path = path.split('/')
+            _path[-2] = 'Vector'
+            name.append(_path[-1])
+            collisionBool = True
+            for j in range(self._Horizon):
+                path_vec = os.path.join(*_path)
+                with open(path_vec, "rb") as f:
+                    x = f.read()
+                    y = loads(x)
+                    vectors.append(y[0])
+                    actions.append(y[1])
+                    if y[0][-1] == 0 and collisionBool:
+                        masks.append(True)
+                    elif y[0][-1] == 1 and collisionBool:
+                        masks.append(True)
+                        collisionBool = False
+                    else:
+                        masks.append(False)
+                    f.close()
+                _path[-1] = self.addString(_path[-1])
 
         # step02. To Tensor
+        # mask, action, vector -> [seq, seq] -> batch, seq, 4
         with torch.no_grad():
             images = torch.tensor(images).float().to(self.device)
             # ------------------------------------------------------ #
             vectors = torch.tensor(vectors).float().to(self.device)
-            vector_pos = vectors[:, :self._Horizon*2]
-            vector_pos = vector_pos.view(self._cfg.batchSize, self._Horizon, 2)
-            vector_collision = vectors[:, self._Horizon*2:]
-            vector_collision = vector_collision.view(
-                self._cfg.batchSize, self._Horizon, 1)
+            vectors = vectors.view(self._cfg.batchSize, self._Horizon, 4)
             actions = torch.tensor(actions).float().to(self.device)
-
-            # b, T -> S, b, -1
+            actions = actions.view(self._cfg.batchSize, self._Horizon, 2)
+            masks = torch.tensor(masks).to(self.device)
+            masks = masks.view(self._cfg.batchSize, self._Horizon, 1)
+ 
             actions = actions.permute(1, 0, 2).contiguous()
-            vector_pos = vector_pos.permute(1, 0, 2).contiguous()
-            vector_collision = vector_collision.permute(1, 0, 2).contiguous()
-            events = torch.cat((vector_pos, vector_collision), dim=-1)
+            vectors = vectors.permute(1, 0, 2).contiguous()
+            masks = masks.permute(1, 0, 2).contiguous()
 
-        self._buffer.append((images, actions, events))
+        self._buffer.append((images, actions, vectors, masks))
         gc.collect()
 
     def run(self):

@@ -1,9 +1,9 @@
 {
     "envName":"./Env/v0",
-    "timeScale":1,
+    "timeScale":5,
     "env":{
         "timeStep":0.2,
-        "horizonTime":2.5
+        "horizonTime":3
     },
     "agent":{
         "Embedded":{
@@ -96,7 +96,7 @@
             "decay":0.0001
         }
     },
-    "replayMemory":10000,
+    "replayMemory":100000,
     "batchSize":32,
     "gradientNorm":99999,
 

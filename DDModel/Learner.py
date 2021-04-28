@@ -86,7 +86,8 @@ class Learner(LearnerTemp):
         self.env = UnityEnvironment(
             name,
             worker_id=id,
-            side_channels=[setChannel, engineChannel]
+            side_channels=[setChannel, engineChannel],
+            no_graphics=True
         )
         self.env.reset()
         # self.behaviroNames = list(self.env.behavior_specs._dict.keys())[0]
@@ -166,27 +167,33 @@ class Learner(LearnerTemp):
         plt.show()
         return historyX
 
-    def _calculateLoss(self, predEvents: torch.tensor, Events: torch.tensor) -> torch.tensor:
-        # predEvents: 25, 2, 2 -> seq, batch, dim
-        # Events: 25, 2, 2 -> seq, batch, dim
-        Events = Events.view(-1, 3)
-        Loss_pos = torch.sum((predEvents[:, :2] - Events[:, :2]).pow(2))
+    def _calculateLoss(self, predEvents: torch.tensor, Events: torch.tensor, masks: torch.tensor) -> torch.tensor:
+        # predEvents: 25, 2, 2 -> seq, batch, 3
+        # Events: 25, 2, 2 -> seq, batch, 4
+        # mask: seq, batch, 1
+
+        # Events[1:, :, :2] -= Events[0:1, :, :2]
+        Events = Events.view(-1, 4)
+        
+        # Loss_pos = torch.sum((predEvents[:, :2] - Events[:, :2]).pow(2))
         prob = predEvents[:, -1]
         ytrue = Events[:, -1]
+        mask = masks.view(-1)
         test = ytrue * torch.log(prob) + \
             (1 - ytrue) * torch.log(1 - prob)
-        Loss_col = - torch.sum(test)
-        return Loss_pos, Loss_col
+        Loss_col = - torch.sum(test[mask])
+        return Loss_col
 
     def _train(
         self,
         images: torch.tensor,
         actions: torch.tensor,
         events: torch.tensor,
+        masks: torch.tensor,
         step: int
     ) -> None:
         predEvents = self.player.forward(images, actions)
-        lossPos, lossCol = self._calculateLoss(predEvents, events)
+        lossCol = self._calculateLoss(predEvents, events, masks)
         # loss = lossPos + lossCol
         loss = lossCol
         self._applyZeroGrad()
@@ -194,9 +201,9 @@ class Learner(LearnerTemp):
         self._step(step)
         if self._tMode:
             with torch.no_grad():
-                _Loss_Pos = lossPos.detach().cpu().numpy()
+                # _Loss_Pos = lossPos.detach().cpu().numpy()
                 _Loss_col = lossCol.detach().cpu().numpy()
-                self._writer.add_scalar("Loss of Position", _Loss_Pos, step)
+                # self._writer.add_scalar("Loss of Position", _Loss_Pos, step)
                 self._writer.add_scalar("Loss of Collision", _Loss_col, step)
 
     def _step(self, step):
@@ -216,6 +223,7 @@ class Learner(LearnerTemp):
     def _append(self, data):
         # self._replayMemory.append(data)
         image, vector, action = data
+        image = np.transpose(image, (2, 0, 1))
         with open(self._cfg.dataPath + 'Image/' + '%06d' % self._count+".bin", "wb") as f:
             x = cPickle.dumps(image)
             f.write(x)
@@ -255,7 +263,7 @@ class Learner(LearnerTemp):
             image, vector, action = self._getObs()
             self._append((image, vector, action))
 
-            if self._count > (self._cfg.replayMemory - 2):
+            if t > (self._cfg.replayMemory - 2):
                 self.env.close()
                 break
         print("Data Sampling is Done!!")
@@ -269,5 +277,5 @@ class Learner(LearnerTemp):
         replayMemory = Replay(self._cfg)
         replayMemory.start()
         for step in count():
-            images, action, events = replayMemory.sample()
-            self._train(images, action, events, step)
+            images, action, events, masks = replayMemory.sample()
+            self._train(images, action, events, masks, step)
