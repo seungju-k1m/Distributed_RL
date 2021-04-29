@@ -106,13 +106,16 @@ class Preprocessor:
                 masks = masks.permute(1, 0, 2).contiguous()
             
             if self._connect.llen("data") > 20:
-                continue
+                cond = True
+                while cond:
+                    time.sleep(2)
+                    if self._connect.llen("data") < 20:
+                        cond = False
                 
             self._connect.rpush(
                 "data",
                 dumps((images, action, vector, masks))
             )
-
 
 
 if __name__ == "__main__":
