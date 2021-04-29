@@ -103,8 +103,11 @@ class Preprocessor:
                 masks = torch.unsqueeze(masks, dim=-1)
                 action = action.permute(1, 0, 2).contiguous()
                 vector = vector.permute(1, 0, 2).contiguous()
-                masks = masks.permute(1, 0, 2).contiguous
+                masks = masks.permute(1, 0, 2).contiguous()
             
+            if self._connect.llen("data") > 20:
+                continue
+                
             self._connect.rpush(
                 "data",
                 dumps((images, action, vector, masks))

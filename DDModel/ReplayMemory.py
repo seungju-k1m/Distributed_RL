@@ -30,8 +30,6 @@ class Replay(threading.Thread):
             pipe.lrange("data", 0, -1)
             pipe.ltrim("data", -1, 0)
             data = pipe.execute()[0]
-            if len(self._buffer) > 20:
-                time.sleep(5)
             
             with self._lock:
                 for d in data:
