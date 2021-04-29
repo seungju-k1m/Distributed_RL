@@ -106,7 +106,7 @@
     "sPath":"./save/DDModel/v0.pth",
     "writeTMode":false,
     "tPath":"./tensorboard/DDModel/v0",
-    "dataPath":"./TestData/",
+    "dataPath":"./SampleData/",
 
     "GMP_theta":0.5,
     "GMP_deltaT":0.05,

@@ -144,7 +144,7 @@ class Node:
     def updateVisitCount(self):
         self._visit = 0
         for key in self._childNodes.keys():
-            self._visit += self._childNodes[key].
+            self._visit += self._childNodes[key]
 
     @ property
     def childNodes(self):
@@ -174,8 +174,7 @@ class Node:
                 cVisit = 0
             values.append(
                 value + self._p[action] * rootTotalVisit /
-                (cVisit) + 1) * (c1 + math.log((totalVisit + c2 + 1)/c2))
-            )
+                ((cVisit) + 1) * (c1 + math.log((totalVisit + c2 + 1)/c2)))
         values=np.array(values)
         action=np.argmax(values)[0]
         return action
