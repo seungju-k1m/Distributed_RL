@@ -96,7 +96,7 @@
             "decay":0.001
         }
     },
-    "replayMemory":100000,
+    "replayMemory":50,
     "batchSize":32,
     "gradientNorm":1000000,
 
@@ -106,7 +106,7 @@
     "sPath":"./save/DDModel/v0.pth",
     "writeTMode":false,
     "tPath":"./tensorboard/DDModel/v0",
-    "dataPath":"./SampleData/",
+    "dataPath":"./TestData/",
 
     "GMP_theta":0.5,
     "GMP_deltaT":0.05,

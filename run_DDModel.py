@@ -31,5 +31,5 @@ if __name__ == "__main__":
     learner = Learner(cfg)
     # learner.GMP()
     if args.train:
-        # learner.collectSamples()
-        learner.run()
+        learner.collectSamples()
+        # learner.run()
