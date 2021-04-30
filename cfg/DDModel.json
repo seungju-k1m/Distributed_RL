@@ -64,7 +64,7 @@
                 "netCat":"MLP",
                 "iSize":64,
                 "nLayer":2,
-                "fSize":[64, 2],
+                "fSize":[32, 2],
                 "act":["relu", "linear"],
                 "BN":false,
                 "prior":3,
@@ -74,7 +74,7 @@
                 "netCat":"MLP",
                 "iSize":64,
                 "nLayer":2,
-                "fSize":[64, 1],
+                "fSize":[32, 1],
                 "act":["relu", "sigmoid"],
                 "BN":false,
                 "prior":3,
@@ -91,22 +91,23 @@
     },
     "optim":{
         "model":{
-            "name":"adam",
-            "lr":1e-4,
-            "decay":0.001
+            "name":"rmsprop",
+            "lr":6e-4,
+            "momentum":0,
+            "eps":0.01
         }
     },
-    "replayMemory":50,
+    "replayMemory":1000,
     "batchSize":32,
-    "gradientNorm":1000000,
+    "gradientNorm":100,
 
     "learnerDevice":"cuda:0",
     "playerDevice":"cuda:0",
 
     "sPath":"./save/DDModel/v0.pth",
-    "writeTMode":false,
+    "writeTMode":true,
     "tPath":"./tensorboard/DDModel/v0",
-    "dataPath":"./TestData/",
+    "dataPath":"./SampleData/",
 
     "GMP_theta":0.5,
     "GMP_deltaT":0.05,

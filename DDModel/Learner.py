@@ -28,6 +28,7 @@ Deep Dynamic Model Algorithm
 
 """
 import os
+import time
 import torch
 
 import numpy as np
@@ -89,6 +90,7 @@ class Learner(LearnerTemp):
         self._to()
         self._buildOptim()
         self._Horizon = 100
+        self._device = torch.device(self._cfg.learnerDevice)
 
     def _buildEnv(self) -> None:
         id = np.random.randint(10, 1000, 1)[0]
@@ -191,9 +193,9 @@ class Learner(LearnerTemp):
 
         # Events[1:, :, :2] -= Events[0:1, :, :2]
         Events = Events.view(-1, 4)
-        
+
         # Loss_pos = torch.sum((predEvents[:, :2] - Events[:, :2]).pow(2))
-        prob = predEvents[:, -1]
+        prob = predEvents[:, :, -1].view(-1)
         ytrue = Events[:, -1]
         mask = masks.view(-1)
         test = ytrue * torch.log(prob) + \
@@ -209,6 +211,10 @@ class Learner(LearnerTemp):
         masks: torch.tensor,
         step: int
     ) -> None:
+        images = images.to(self._device)
+        actions = actions.to(self._device)
+        events = events.to(self._device)
+        masks = masks.to(self._device)
         predEvents = self.player.forward(images, actions)
         lossCol = self._calculateLoss(predEvents, events, masks)
         # loss = lossPos + lossCol
@@ -278,7 +284,11 @@ class Learner(LearnerTemp):
             if len(self._stackAction) == 0:
                 self._GMP()
             image, vector, action = self._getObs()
-            self._append((image, vector, action))
+            if t == 0:
+                prevVector = vector.copy()
+            else:
+                self._append((image, prevVector, action))
+                prevVector = vector.copy()
 
             if t > (self._cfg.replayMemory - 2):
                 self.env.close()
@@ -294,5 +304,7 @@ class Learner(LearnerTemp):
         replayMemory = Replay(self._cfg)
         replayMemory.start()
         for step in count():
+            t = time.time()
             images, action, events, masks = replayMemory.sample()
             self._train(images, action, events, masks, step)
+            # print(time.time() - t)

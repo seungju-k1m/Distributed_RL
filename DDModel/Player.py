@@ -44,7 +44,8 @@ class Player(PlayerTemp):
 
             events.append(event)
         
-        events = torch.cat(events, dim=0)
+        events = torch.stack(events, dim=0)
+        # events b, seq, 
         return events
 
     def to(self):

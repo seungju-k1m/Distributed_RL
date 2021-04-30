@@ -12,7 +12,7 @@ class Replay(threading.Thread):
         self, Config: DDModelConfig
     ):
         super(Replay, self).__init__()
-        # self.setDaemon(True)
+        self.setDaemon(True)
         self._cfg = Config
         self._lock = threading.Lock()
         self._connect = redis.StrictRedis("localhost")
@@ -30,7 +30,7 @@ class Replay(threading.Thread):
             pipe.lrange("data", 0, -1)
             pipe.ltrim("data", -1, 0)
             data = pipe.execute()[0]
-            
+
             with self._lock:
                 for d in data:
                     self._buffer.append(loads(d))
