@@ -3,7 +3,7 @@
     "timeScale":5,
     "env":{
         "timeStep":0.2,
-        "horizonTime":3
+        "horizonTime":5
     },
     "agent":{
         "Embedded":{
@@ -112,12 +112,11 @@
     "lPath":false,
     "dataPath":"./SampleData/",
 
-    "GMP_theta":0.5,
-    "GMP_deltaT":0.05,
-    "GMP_drift":[0.07, 0],
-    "GMP_sigma":0.03,
+    "GMP_theta":2,
+    "GMP_deltaT":0.2,
+    "GMP_drift":[0.5, 0],
+    "GMP_sigma":0.3,
 
-    "GMP_yaw_theta":1.0,
-    "GMP_yaw_deltaT":0.1,
-    "GMP_yaw_sigma":0.1
+    "GMP_yaw_theta":2,
+    "GMP_yaw_sigma":0.3
 }

@@ -25,9 +25,9 @@ Deep Dynamic Model Algorithm
         if the valid length of sequence data are shorter than horizon time, the training algorithm have a problem.
         In the training, Concept of mask can utilize only valid data while maintaing data shape.
 
-
 """
 import os
+import random
 import time
 import torch
 
@@ -35,7 +35,6 @@ import numpy as np
 
 import _pickle as cPickle
 
-from PIL import Image
 from itertools import count
 from collections import deque
 from torch.utils.tensorboard import SummaryWriter
@@ -97,7 +96,8 @@ class Learner(LearnerTemp):
             loadData = torch.load(self._cfg.lPath)
             self.player.load(loadData)
             self.optim.load_state_dict(loadData["optim"])
-        self._Horizon = 100
+        self._Horizon = int(
+            self._cfg.env["horizonTime"]/self._cfg.env["timeStep"])
         self._device = torch.device(self._cfg.learnerDevice)
         self._lr = self._cfg.optim['model']['lr']
         self._decayLr = self._lr / self._cfg.runStep
@@ -140,24 +140,25 @@ class Learner(LearnerTemp):
         events = self.model._forward(img, course_Actions)
         return events
 
-    def _preprocessObs(self, image: Image, vector: np.ndarray):
-        """
-        preprocess batch observation for forwarding
-            image(Image): [b, 3, 480, 640]
-            vector(np.ndarray): [b, x]
-
-            output
-        """
-        pass
-
     def _GMPStep(self, X: np.ndarray) -> np.ndarray:
-        x_t = X[0] * (1 - self._cfg.GMP_deltaT) + self._cfg.GMP_theta * \
-            np.array(self._cfg.GMP_drift[0]) + self._cfg.GMP_sigma * \
-            np.random.normal(0, 1)
+        theta = self._cfg.GMP_theta
+        mu = self._cfg.GMP_drift
+        mu1, mu2 = mu[0], mu[1]
 
-        y_t = X[1] * (1 - self._cfg.GMP_deltaT) + self._cfg.GMP_theta * \
-            np.array(self._cfg.GMP_drift[1]) + self._cfg.GMP_yaw_sigma * \
-            np.random.normal(0, 1)
+        sigma1 = self._cfg.GMP_sigma
+        sigma2 = self._cfg.GMP_yaw_sigma
+        dT = self._cfg.GMP_deltaT
+        # x_t = X[0] * (1 - self._cfg.GMP_deltaT) + self._cfg.GMP_theta * \
+        #     np.array(self._cfg.GMP_drift[0]) + self._cfg.GMP_sigma * \
+        #     np.random.normal(0, 1)
+
+        # y_t = X[1] * (1 - self._cfg.GMP_deltaT) + self._cfg.GMP_theta * \
+        #     np.array(self._cfg.GMP_drift[1]) + self._cfg.GMP_yaw_sigma * \
+        #     np.random.normal(0, 1)
+        x_t = X[0] + theta * (mu1 - X[0]) * dT + sigma1 * \
+            np.random.normal([0], 1)[0] * np.sqrt(dT)
+        y_t = X[1] + theta * (mu2 - X[1]) * dT + sigma2 * \
+            np.random.normal([0], 1)[0] * np.sqrt(dT)
         if x_t < 0:
             x_t = 0
         if x_t > 1:
@@ -166,14 +167,19 @@ class Learner(LearnerTemp):
         return X_t
 
     def _GMP(self):
+        mu2 = random.random() - 0.5
+        self._cfg.GMP_drift[-1] = mu2
         historyX = []
+        horionZtime = self._cfg.env["horizonTime"]
+        step = int(horionZtime / self._cfg.GMP_deltaT)
+
         initX = np.array(
-            [0.6,
-             np.random.random(1)[0] - 0.5]
+            [0.4,
+             0]
         )
         historyX.append(np.reshape(initX.copy(), (1, 2)))
         X = initX
-        for t in range(99):
+        for t in range(step - 1):
             X_t = self._GMPStep(X)
             historyX.append(np.reshape(X_t.copy(), (1, -1)))
             X = X_t
@@ -189,8 +195,10 @@ class Learner(LearnerTemp):
                      * i for i in range(self._Horizon)]
         import matplotlib.pyplot as plt
         plt.subplot(1, 2, 1)
+        plt.ylim([-1, 1])
         plt.plot(timeTable, historyX[:, 0])
         plt.subplot(1, 2, 2)
+        plt.ylim([-1, 1])
         plt.plot(timeTable, historyX[:, 1])
         plt.show()
         return historyX
