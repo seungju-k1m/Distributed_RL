@@ -51,3 +51,7 @@ class Player(PlayerTemp):
     def to(self):
         self.Embedded.to(self._device)
         self.Output.to(self._device)
+
+    def load(self, stateDict: dict):
+        self.Embedded.load_state_dict(stateDict['embedded'])
+        self.Output.load_state_dict(stateDict['output'])

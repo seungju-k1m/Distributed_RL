@@ -1,4 +1,4 @@
-
+import gc
 import time
 import redis
 import threading
@@ -30,15 +30,20 @@ class Replay(threading.Thread):
             pipe.lrange("data", 0, -1)
             pipe.ltrim("data", -1, 0)
             data = pipe.execute()[0]
-
-            with self._lock:
+            scan = self._connect.scan()
+            if scan[-1] != []:
+                self._connect.delete(*scan[-1])
+            if data is not None:
+            # with self._lock:
                 for d in data:
-                    self._buffer.append(loads(d))
+                    x = loads(d)
+                    self._buffer.insert(0, x)
+            gc.collect()
+            time.sleep(2.5)
 
     def sample(self):
-        while len(self._buffer) < 3:
+        while len(self._buffer) < 10:
             time.sleep(1)
-            print("Buffering~~")
         return self._buffer.pop()
 
     def __len__(self):

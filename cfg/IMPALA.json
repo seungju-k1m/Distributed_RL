@@ -13,7 +13,7 @@
     "c_lambda":1,
     "c_value":1.0,
     "p_value":1.0,
-    "EntropyRegularizer":0.001,
+    "EntropyRegularizer":0.001,                             
     "clipingGradientNorm":40,
     "stack":4,
     "skipFrame":2,
@@ -33,10 +33,9 @@
 
     "optim":{
         "actor-critic":{
-            "name":"rmsprop",
-            "lr":0.0006,
-            "momentum":0,
-            "eps":0.01
+            "name":"adam",
+            "lr":0.0001,
+            "decay":0.001
         }
     },
     "agent":{

@@ -94,19 +94,22 @@
             "name":"rmsprop",
             "lr":6e-4,
             "momentum":0,
-            "eps":0.01
+            "eps":0.01,
+            "decay":0.01
         }
     },
-    "replayMemory":1000,
+    "replayMemory":100000,
     "batchSize":32,
     "gradientNorm":100,
+    "runStep":3e5,
 
     "learnerDevice":"cuda:0",
     "playerDevice":"cuda:0",
 
-    "sPath":"./save/DDModel/v0.pth",
+    "sPath":"./save/DDModel/L2.pth",
     "writeTMode":true,
-    "tPath":"./tensorboard/DDModel/v0",
+    "tPath":"./tensorboard/DDModel/L2",
+    "lPath":false,
     "dataPath":"./SampleData/",
 
     "GMP_theta":0.5,

@@ -7,11 +7,14 @@ import random
 from _pickle import loads, dumps
 
 import torch.multiprocessing as mp
+# import multiprocessing as mp
 from collections import deque
 from DDModel.Config import DDModelConfig
 
+
 cfg = DDModelConfig('./cfg/DDModel.json')
 device = torch.device("cpu")
+mp.set_start_method('spawn', force=True)
 
 
 def preprocessBatch(path: str):
@@ -22,7 +25,9 @@ def preprocessBatch(path: str):
     masks = []
     with open(path, 'rb') as f:
         x = f.read()
-        image = torch.tensor(loads(x)).float().to(device)
+        image = loads(x)
+        image = torch.tensor(image).float().to(device)
+        # image.share_memory_()
         sample.append(image)
         f.close()
     path = path.split('/')
@@ -33,7 +38,9 @@ def preprocessBatch(path: str):
         with open(path_vec, "rb") as f:
             x = f.read()
             y = loads(x)
-            action = torch.tensor(y[1]).float().to(device)
+            action = y[1]
+            action = torch.tensor(action).float().to(device)
+            # action.share_memory_()
             actions.append(action)
             if y[0][-1] == 0 and collisionBool:
                 masks.append(True)
@@ -42,9 +49,11 @@ def preprocessBatch(path: str):
                 collisionBool = False
             else:
                 y[0][-1] = 1
-                masks.append(True)
-                # masks.append(False)
-            vector = torch.tensor(y[0]).float().to(device)
+                # masks.append(True)
+                masks.append(False)
+            vector = y[0]
+            vector = torch.tensor(vector).float().to(device)
+            # vector.share_memory_()
             vectors.append(vector)
             f.close()
         splitX = path[-1].split('.')
@@ -78,20 +87,28 @@ class Preprocessor:
         self._rImgName = self._imgName.copy()
         random.shuffle(self._rImgName)
         self._numData = len(self._imgName)
-        self._pool = mp.Pool(processes=1)
+        self._pool = mp.Pool(processes=8)
         print("Preprocessing!")
 
     def run(self):
+        Epoch = 1
+        print("Epoch : {}".format(Epoch))
         while 1:
             batch_path = []
+
             if len(self._rImgName) < (self._cfg.batchSize+3):
+                Epoch += 1
+                print("Epoch : {}".format(Epoch))
                 self._rImgName = self._imgName.copy()
                 random.shuffle(self._rImgName)
             for _ in range(self._cfg.batchSize):
                 batch_path.append(self._rImgName.pop())
             x = time.time()
+            for b in batch_path:
+                preprocessBatch(b)
+            print(time.time() - x)
             outputs = self._pool.map(preprocessBatch, batch_path)
-            # print(time.time() - x)
+            print(time.time() - x)
             images, action, vector, masks = [], [], [], []
             with torch.no_grad():
                 for data in outputs:
@@ -123,6 +140,74 @@ class Preprocessor:
 
 
 if __name__ == "__main__":
-    a = Preprocessor('./cfg/DDModel.json')
-    a.run()
-    print("hi")
+
+    connect = redis.StrictRedis(host="localhost")
+    # self._device = torch.device("cpu")
+    buffer = deque(maxlen=5)
+    Horizon = int(cfg.env["horizonTime"] /
+                  cfg.env["timeStep"])
+    scan = connect.scan()
+    if scan[-1] != []:
+        connect.delete(*scan[-1])
+    imgName = os.listdir(cfg.dataPath+'/Image')
+    imgName.sort()
+    for i in range(Horizon + 1):
+        imgName.pop()
+
+    def fI(x): return cfg.dataPath + 'Image/' + x
+    imgName = list(map(fI, imgName))
+    rImgName = imgName.copy()
+    random.shuffle(rImgName)
+    numData = len(imgName)
+    pool = mp.Pool()
+    print("Preprocessing!")
+
+    Epoch = 1
+    print("Epoch : {}".format(Epoch))
+    while 1:
+        batch_path = []
+
+        if len(rImgName) < (cfg.batchSize+3):
+            Epoch += 1
+            print("Epoch : {}".format(Epoch))
+            rImgName = imgName.copy()
+            random.shuffle(rImgName)
+        for _ in range(cfg.batchSize):
+            batch_path.append(rImgName.pop())
+        x = time.time()
+        # outputs = []
+        # for b in batch_path:
+        #     outputs.append(preprocessBatch(b))
+        # print(time.time() - x)
+        # print("HI")
+        outputs = pool.map(preprocessBatch, batch_path)
+
+        # print(time.time() - x)
+        images, action, vector, masks = [], [], [], []
+        with torch.no_grad():
+            for data in outputs:
+                images.append(data[0])
+                vector.append(torch.stack(data[1], dim=0))
+                action.append(torch.stack(data[2], dim=0))
+                masks.append(torch.tensor(data[3]).to(device))
+            images = torch.stack(images, dim=0).cpu()
+            vector = torch.stack(vector, dim=0).cpu()
+            action = torch.stack(action, dim=0).cpu()
+            action = torch.squeeze(action, dim=2).cpu()
+            masks = torch.stack(masks, dim=0)
+            masks = torch.unsqueeze(masks, dim=-1).cpu()
+            action = action.permute(1, 0, 2).contiguous()
+            vector = vector.permute(1, 0, 2).contiguous()
+            masks = masks.permute(1, 0, 2).contiguous()
+
+        if connect.llen("data") > 20:
+            cond = True
+            while cond:
+                time.sleep(0.5)
+                if connect.llen("data") < 21:
+                    cond = False
+        # print(1)
+        connect.rpush(
+            "data",
+            dumps([images, action, vector, masks])
+        )

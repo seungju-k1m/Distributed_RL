@@ -62,9 +62,13 @@ class Learner(LearnerTemp):
         # self._to()
         self._tMode = self._cfg.writeTMode
         if self._tMode:
-            if os.path.isdir(self._cfg.tPath):
-                ind = np.random.randint(100)
-                self._cfg.tPath += str(ind)
+            ind = 0
+            path = list(os.path.split(self._cfg.tPath))
+            lastPath = path[-1]
+            while os.path.isdir(self._cfg.tPath):
+                path[-1] = lastPath + '_%03d' % ind
+                self._cfg.tPath = os.path.join(*path)
+                ind += 1
             self._writer = SummaryWriter(self._cfg.tPath)
             info = writeTrainInfo(self._cfg.data)
             print(info)
@@ -89,8 +93,14 @@ class Learner(LearnerTemp):
         self._buildModel()
         self._to()
         self._buildOptim()
+        if self._cfg.lPath:
+            loadData = torch.load(self._cfg.lPath)
+            self.player.load(loadData)
+            self.optim.load_state_dict(loadData["optim"])
         self._Horizon = 100
         self._device = torch.device(self._cfg.learnerDevice)
+        self._lr = self._cfg.optim['model']['lr']
+        self._decayLr = self._lr / self._cfg.runStep
 
     def _buildEnv(self) -> None:
         id = np.random.randint(10, 1000, 1)[0]
@@ -105,8 +115,7 @@ class Learner(LearnerTemp):
         self.env = UnityEnvironment(
             name,
             worker_id=id,
-            side_channels=[setChannel, engineChannel],
-            no_graphics=True
+            side_channels=[setChannel, engineChannel]
         )
         self.env.reset()
         # self.behaviroNames = list(self.env.behavior_specs._dict.keys())[0]
@@ -236,6 +245,9 @@ class Learner(LearnerTemp):
         norm_gradient = self.player.Embedded.calculateNorm().cpu().detach().numpy()
         norm_gradient += self.player.Output.calculateNorm().cpu().detach().numpy()
         self.optim.step()
+        for g in self.optim.param_groups:
+            if step < self._cfg.runStep:
+                g["lr"] = self._lr - self._decayLr * step
         if self._tMode:
             self._writer.add_scalar(
                 "Norm of Gradient",
@@ -247,6 +259,7 @@ class Learner(LearnerTemp):
         # self._replayMemory.append(data)
         image, vector, action = data
         image = np.transpose(image, (2, 0, 1))
+        # image = np.reshape(image, (-1))
         with open(self._cfg.dataPath + 'Image/' + '%06d' % self._count+".bin", "wb") as f:
             x = cPickle.dumps(image)
             f.write(x)
@@ -304,7 +317,14 @@ class Learner(LearnerTemp):
         replayMemory = Replay(self._cfg)
         replayMemory.start()
         for step in count():
-            t = time.time()
             images, action, events, masks = replayMemory.sample()
+            x = time.time()
             self._train(images, action, events, masks, step)
+            # print(time.time() - x)
             # print(time.time() - t)
+            if (step + 1) % 10000 == 0:
+                torch.save({
+                    "embedded": self.player.Embedded.state_dict(),
+                    "output": self.player.Output.state_dict(),
+                    "optim": self.optim.state_dict()
+                }, self._cfg.sPath)
