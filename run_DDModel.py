@@ -17,8 +17,16 @@ parser.add_argument(
     "--train",
     "-t",
     action="store_true",
-    default=True,
+    default=False,
     help="if you add this arg, train mode is on",
+)
+
+parser.add_argument(
+    "--sample",
+    '-s',
+    action="store_true",
+    default=True,
+    help="if you add this arg, sampling mode is on"
 )
 
 args = parser.parse_args()
@@ -30,6 +38,7 @@ if __name__ == "__main__":
     cfg = DDModelConfig(path)
     learner = Learner(cfg)
     # learner.GMP()
-    if args.train:
+    if args.sample:
         learner.collectSamples()
-        # learner.run()
+    if args.train:
+        learner.run()

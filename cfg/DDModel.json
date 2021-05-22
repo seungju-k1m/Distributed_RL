@@ -1,8 +1,8 @@
 {
-    "envName":"./Env/v0",
+    "envName":"./Env/v0_1",
     "timeScale":5,
     "env":{
-        "timeStep":0.2,
+        "timeStep":0.1,
         "horizonTime":5
     },
     "agent":{
@@ -23,7 +23,7 @@
             },
             "module01":{
                 "netCat":"MLP",
-                "iSize":289536,
+                "iSize":14976,
                 "nLayer":4,
                 "fSize":[256, 256, 128, 128],
                 "act":["relu", "relu", "relu", "linear"],
@@ -98,7 +98,7 @@
             "decay":0.01
         }
     },
-    "replayMemory":100000,
+    "replayMemory":5000,
     "batchSize":32,
     "gradientNorm":100,
     "runStep":3e5,
@@ -106,17 +106,14 @@
     "learnerDevice":"cuda:0",
     "playerDevice":"cuda:0",
 
-    "sPath":"./save/DDModel/L2.pth",
+    "sPath":"./save/DDModel/L4.pth",
     "writeTMode":true,
-    "tPath":"./tensorboard/DDModel/L2",
+    "tPath":"./tensorboard/DDModel/L4",
     "lPath":false,
-    "dataPath":"./SampleData/",
+    "dataPath":"./SampleData",
 
-    "GMP_theta":2,
-    "GMP_deltaT":0.2,
-    "GMP_drift":[0.5, 0],
-    "GMP_sigma":0.3,
-
-    "GMP_yaw_theta":2,
-    "GMP_yaw_sigma":0.3
+    "GMP_theta":[0.05, 0.15],
+    "GMP_deltaT":0.1,
+    "GMP_drift":[0.13, 0],
+    "GMP_beta":[0.05, 0.05]
 }

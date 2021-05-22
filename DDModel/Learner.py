@@ -27,24 +27,25 @@ Deep Dynamic Model Algorithm
 
 """
 import os
-import random
+import math
 import time
 import torch
+import random
 
 import numpy as np
-
 import _pickle as cPickle
 
 from itertools import count
 from collections import deque
-from torch.utils.tensorboard import SummaryWriter
 
 from baseline.utils import writeTrainInfo
+from torch.utils.tensorboard import SummaryWriter
 
 from DDModel.Player import Player
 from DDModel.ReplayMemory import Replay
 from DDModel.LearnerTemp import LearnerTemp
 
+from gibson2.envs.igibson_env import iGibsonEnv
 
 # Unity
 from mlagents_envs.environment import UnityEnvironment
@@ -59,6 +60,24 @@ class Learner(LearnerTemp):
 
         # self._buildModel()
         # self._to()
+
+        self._replayMemory = deque(maxlen=int(self._cfg.replayMemory))
+        # self._replayMemory = ReplayMemory(int(self._cfg.replayMemory))
+        self._buildModel()
+        self._to()
+        self._buildOptim()
+        if self._cfg.lPath:
+            loadData = torch.load(self._cfg.lPath)
+            self.player.load(loadData)
+            self.optim.load_state_dict(loadData["optim"])
+        self._Horizon = int(
+            self._cfg.env["horizonTime"]/self._cfg.env["timeStep"])
+        self._device = torch.device(self._cfg.learnerDevice)
+        self._lr = self._cfg.optim['model']['lr']
+        self._decayLr = self._lr / self._cfg.runStep
+        self._count = 0
+
+    def _loadBoard(self):
         self._tMode = self._cfg.writeTMode
         if self._tMode:
             ind = 0
@@ -86,21 +105,6 @@ class Learner(LearnerTemp):
 
         if not os.path.isdir(path):
             os.makedirs(path)
-
-        self._replayMemory = deque(maxlen=int(self._cfg.replayMemory))
-        # self._replayMemory = ReplayMemory(int(self._cfg.replayMemory))
-        self._buildModel()
-        self._to()
-        self._buildOptim()
-        if self._cfg.lPath:
-            loadData = torch.load(self._cfg.lPath)
-            self.player.load(loadData)
-            self.optim.load_state_dict(loadData["optim"])
-        self._Horizon = int(
-            self._cfg.env["horizonTime"]/self._cfg.env["timeStep"])
-        self._device = torch.device(self._cfg.learnerDevice)
-        self._lr = self._cfg.optim['model']['lr']
-        self._decayLr = self._lr / self._cfg.runStep
 
     def _buildEnv(self) -> None:
         id = np.random.randint(10, 1000, 1)[0]
@@ -140,45 +144,36 @@ class Learner(LearnerTemp):
         events = self.model._forward(img, course_Actions)
         return events
 
+    def __step(self, curStep, drift, beta, theta, deltaT):
+        nextStep = drift + math.exp(-beta * deltaT) * (curStep - drift) + np.random.normal(
+            0, theta*math.sqrt((1 - math.exp(-2*beta*deltaT)) / (2 * beta)))
+        return nextStep
+
     def _GMPStep(self, X: np.ndarray) -> np.ndarray:
-        theta = self._cfg.GMP_theta
-        mu = self._cfg.GMP_drift
-        mu1, mu2 = mu[0], mu[1]
-
-        sigma1 = self._cfg.GMP_sigma
-        sigma2 = self._cfg.GMP_yaw_sigma
-        dT = self._cfg.GMP_deltaT
-        # x_t = X[0] * (1 - self._cfg.GMP_deltaT) + self._cfg.GMP_theta * \
-        #     np.array(self._cfg.GMP_drift[0]) + self._cfg.GMP_sigma * \
-        #     np.random.normal(0, 1)
-
-        # y_t = X[1] * (1 - self._cfg.GMP_deltaT) + self._cfg.GMP_theta * \
-        #     np.array(self._cfg.GMP_drift[1]) + self._cfg.GMP_yaw_sigma * \
-        #     np.random.normal(0, 1)
-        x_t = X[0] + theta * (mu1 - X[0]) * dT + sigma1 * \
-            np.random.normal([0], 1)[0] * np.sqrt(dT)
-        y_t = X[1] + theta * (mu2 - X[1]) * dT + sigma2 * \
-            np.random.normal([0], 1)[0] * np.sqrt(dT)
-        if x_t < 0:
-            x_t = 0
-        if x_t > 1:
-            x_t = 1
-        X_t = np.array([x_t, y_t]).reshape((2))
+        x1, x2 = X[0], X[1]
+        x1_t = self.__step(
+            x1, self._cfg.GMP_drift[0], self._cfg.GMP_beta[0], self._cfg.GMP_theta[0],
+            self._cfg.GMP_deltaT)
+        x2_t = self.__step(
+            x2, self._cfg.GMP_drift[1], self._cfg.GMP_beta[1], self._cfg.GMP_theta[1],
+            self._cfg.GMP_deltaT)
+        if x1_t < 0:
+            x1_t = 0
+        X_t = np.array([x1_t, x2_t]).T
         return X_t
 
     def _GMP(self):
-        mu2 = random.random() - 0.5
-        self._cfg.GMP_drift[-1] = mu2
         historyX = []
         horionZtime = self._cfg.env["horizonTime"]
         step = int(horionZtime / self._cfg.GMP_deltaT)
 
         initX = np.array(
-            [0.4,
+            [0.1,
              0]
         )
         historyX.append(np.reshape(initX.copy(), (1, 2)))
         X = initX
+        self._cfg.GMP_theta[-1] = random.random() * 0.5
         for t in range(step - 1):
             X_t = self._GMPStep(X)
             historyX.append(np.reshape(X_t.copy(), (1, -1)))
@@ -195,10 +190,10 @@ class Learner(LearnerTemp):
                      * i for i in range(self._Horizon)]
         import matplotlib.pyplot as plt
         plt.subplot(1, 2, 1)
-        plt.ylim([-1, 1])
+        plt.ylim([-0.22, 0.22])
         plt.plot(timeTable, historyX[:, 0])
         plt.subplot(1, 2, 2)
-        plt.ylim([-1, 1])
+        plt.ylim([-2.84, 2.84])
         plt.plot(timeTable, historyX[:, 1])
         plt.show()
         return historyX
@@ -268,12 +263,16 @@ class Learner(LearnerTemp):
         image, vector, action = data
         image = np.transpose(image, (2, 0, 1))
         # image = np.reshape(image, (-1))
-        with open(self._cfg.dataPath + 'Image/' + '%06d' % self._count+".bin", "wb") as f:
+        with open(self._cfg.dataPath + '/Image/' + '%06d' % self._count+".bin", "wb") as f:
             x = cPickle.dumps(image)
             f.write(x)
             f.close()
-        with open(self._cfg.dataPath + 'Vector/' + '%06d' % self._count+".bin", "wb") as f:
-            x = cPickle.dumps((vector, action))
+        with open(self._cfg.dataPath + '/Vector/' + '%06d' % self._count+".bin", "wb") as f:
+            vector.append(action[0][0])
+            vector.append(action[0][1])
+            vector = np.array(vector, dtype=np.float32)
+            # x, y, ori, done, collision, velo, yaw
+            x = cPickle.dumps(vector)
             f.write(x)
             f.close()
         self._count += 1
@@ -293,33 +292,114 @@ class Learner(LearnerTemp):
     def permuteImage(x: np.array):
         return np.transpose(x, (2, 0, 1))
 
+    def _toWheelVelo(self, action):
+        d = 0.160
+        radius = 0.036
+        maxW = 6 + 2/3
+        v = action[0][0]
+        yaw = action[0][1]
+        w_r = v/radius + yaw / (2 * radius) * d
+        w_l = v/radius - yaw / (2 * radius) * d
+
+        # v = .0
+        # yaw = 1
+        return np.array([[w_r/maxW, w_l/maxW]])
+
     def collectSamples(self):
         """Method: Collect Samples from Unity Environment
         """
         print("--------------------------------")
         print("Initalize Unity Environment")
-        self._buildEnv()
+        # self._buildEnv()
         print("--------------------------------")
         print("Data Sampling starts!!")
-        for t in count():
-            if len(self._stackAction) == 0:
-                self._GMP()
-            image, vector, action = self._getObs()
-            if t == 0:
-                prevVector = vector.copy()
-            else:
-                self._append((image, prevVector, action))
-                prevVector = vector.copy()
 
-            if t > (self._cfg.replayMemory - 2):
-                self.env.close()
-                break
-        print("Data Sampling is Done!!")
-        print("--------------------------")
+        # for t in count():
+        #     if len(self._stackAction) == 0:
+        #         self._GMP()
+        #     image, vector, action = self._getObs()
+        #     if t == 0:
+        #         prevVector = vector.copy()
+        #     else:
+        #         self._append((image, prevVector, action))
+        #         prevVector = vector.copy()
+
+        #     if t > (self._cfg.replayMemory - 2):
+        #         self.env.close()
+        #         break
+        # print("Data Sampling is Done!!")
+        # print("--------------------------")
+
+        self._GMP()
+
+        envName = os.listdir('./SampleData')
+        envName.sort()
+        # envName = [envName[-1]]
+        for name in envName:
+            self._cfg.dataPath = os.path.join('./SampleData', name)
+
+            if os.path.isdir(os.path.join('./SampleData', name, 'Image')):
+                pass
+            else:
+                os.mkdir(os.path.join(
+                    './SampleData', name, 'Image'
+                ))
+                os.mkdir(os.path.join(
+                    './SampleData', name, 'Vector'
+                ))
+            self._count = len(os.listdir(
+                os.path.join(self._cfg.dataPath, 'Image')
+            ))
+            step = self._count
+            env = iGibsonEnv(
+                config_file='./cfg/iGibson.yaml',
+                scene_id=name,
+                mode='gui',
+                action_timestep=0.1,
+                physics_timestep=0.05
+            )
+            for episode in count():
+                env.reset()
+                state = env.get_state()
+                pos = list(env.robots[0].get_position()[:2].copy())
+                ori = env.robots[0].get_orientation()[1]
+                done = False
+                pos.append(ori)
+                pos.append(int(done))
+                pos.append(0)
+                collisionStep = 1
+                while done is False:
+                    if len(self._stackAction) == 0:
+                        self._GMP()
+                    action = self._stackAction.pop(0)
+                    wHAction = self._toWheelVelo(action)
+
+                    # action = np.array([[1, -1]])
+                    self._append((state['rgb'].copy(), pos, action.copy()))
+                    state.clear()
+                    pos.clear()
+                    state, _, done, info = env.step(wHAction[0])
+                    done = bool(done)
+                    collision = state['scan'].min() < 0.008
+                    if collision:
+                        collisionStep += 1
+
+                    if collisionStep > 15:
+                        done = True
+
+                    pos = list(env.robots[0].get_position()[:2].copy())
+                    pos.append(ori)
+                    pos.append(int(done))
+                    pos.append(int(collision))
+                    step += 1
+                if (step > self._cfg.replayMemory):
+                    env.close()
+                    break
 
     def run(self):
         """Method: Train the Neural Network according to the BADGR Algorithm.
         """
+        self._loadBoard()
         print("--------------------------")
         print("Training Starts~~")
         replayMemory = Replay(self._cfg)
