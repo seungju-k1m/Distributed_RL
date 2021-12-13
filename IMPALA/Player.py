@@ -1,3 +1,4 @@
+from configuration import REDIS_SERVER
 import gc
 import gym
 import time
@@ -5,7 +6,7 @@ import redis
 import torch
 import _pickle
 import numpy as np
-from IMPALA.Config import IMPALAConfig
+from configuration import *
 from baseline.baseAgent import baseAgent
 from collections import deque
 from itertools import count
@@ -13,26 +14,23 @@ from PIL import Image as im
 
 
 class Player:
-    def __init__(self, config: IMPALAConfig, trainMode=True):
-        self.trainMode = trainMode
-        self.config = config
-        self.device = torch.device(self.config.actorDevice)
+    def __init__(self, idx=0):
+        self.device = torch.device(DEVICE)
         self.buildModel()
-        self._connect = redis.StrictRedis(host=self.config.hostName)
+        self._connect = redis.StrictRedis(host=REDIS_SERVER)
         names = self._connect.scan()
-        if names[1] != []:
-            self._connect.delete(*names[-1])
-        self.env = gym.make(self.config.envName)
+
+        self.env = gym.make('PongNoFrameskip-v4')
         self.env.seed(np.random.randint(1, 1000))
         self.to()
         self.countModel = -1
-        self.obsDeque = deque(maxlen=self.config.stack)
+        self.obsDeque = deque(maxlen=4)
         # self.resetObsDeque()
         self.localbuffer = []
 
     def resetObsDeque(self, obs):
         grayObs = self.rgb_to_gray(obs)
-        for i in range(self.config.stack):
+        for i in range(4):
             self.obsDeque.append(grayObs.copy())
 
     @staticmethod
@@ -46,14 +44,12 @@ class Player:
         return np.uint8(grayImage)
 
     def buildModel(self):
-        for netName, data in self.config.agent.items():
-            if netName == "actor-critic":
-                self.model = baseAgent(data)
+        self.model = baseAgent(MODEL)
 
     def forward(self, state):
         state: torch.tensor
         output = self.model.forward([state])[0]
-        logit_policy = output[:, : self.config.actionSize]
+        logit_policy = output[:, : ACTION_SIZE]
         policy = torch.softmax(logit_policy, dim=-1)
         dist = torch.distributions.categorical.Categorical(probs=policy)
         action = dist.sample()
@@ -62,7 +58,7 @@ class Player:
         return policy, value, action
 
     def to(self):
-        device = torch.device(self.config.actorDevice)
+        device = torch.device(DEVICE)
         self.model.to(device)
 
     def getAction(self, state: np.array) -> np.array:
@@ -93,7 +89,7 @@ class Player:
         grayObs = self.rgb_to_gray(obs)
         self.obsDeque.append(grayObs)
         state = []
-        for i in range(self.config.stack):
+        for i in range(4):
             state.append(self.obsDeque[i])
         state = np.concatenate(state, axis=0)
         return np.uint8(state)
@@ -118,7 +114,7 @@ class Player:
         return pT
 
     def checkLength(self, current, past):
-        totalLength = 2 + 4 * (self.config.unroll_step)
+        totalLength = 2 + 4 * (UNROLL_STEP)
         if len(current) != totalLength:
             curLength = len(current)
             pastLength = totalLength - curLength
@@ -133,6 +129,9 @@ class Player:
         step = 1
         episode = 1
         pastbuffer = []
+        keys = ['ale.lives', 'lives']
+        key = "ale.lives"
+        
 
         for t in count():
             self.localbuffer.clear()
@@ -142,23 +141,29 @@ class Player:
             action, policy = self.getAction(state)
             done = False
             n = 0
-            if self.trainMode:
-                self.localbuffer.append(state.copy())
-                self.localbuffer.append(action.copy())
-                self.localbuffer.append(policy.copy())
+            self.localbuffer.append(state.copy())
+            self.localbuffer.append(action.copy())
+            self.localbuffer.append(policy.copy())
             live = -1
             episode_reward = 0
             while done is False:
-                for i in range(self.config.skipFrame - 1):
-                    self.env.step(action)
-                nextobs, reward, done, info = self.env.step(action)
-
+                reward = 0
+                for i in range(4 - 1):
+                    _, r, __, ___ =  self.env.step(action[0])
+                    reward += r
+                nextobs, r, done, info = self.env.step(action[0])
+                reward += r
                 if live == -1:
-                    live = info["ale.lives"]
-                if info["ale.lives"] != 0:
-                    _done = live != info["ale.lives"]
+                    try:
+                        live = info[key]
+                    except:
+                        key = keys[1 - keys.index(key)]
+                        live = info[key]
+                
+                if info[key] != 0:
+                    _done = live != info[key]
                     if _done:
-                        live = info["ale.lives"]
+                        live = info[key]
                 else:
                     _done = reward != 0
 
@@ -166,19 +171,12 @@ class Player:
                 step += 1
                 n += 1
                 action, policy = self.getAction(nextState)
-                if self.trainMode:
-                    # _reward = 0.3 * np.minimum(np.tanh(reward), 0) + 5.0 * np.maximum(
-                    #     np.tanh(reward), 0
-                    # )
-                    self.localbuffer.append(reward)
+   
+                self.localbuffer.append(reward)
 
-                if self.config.renderMode:
-                    self.env.render()
-                if self.trainMode is False:
-                    time.sleep(0.01)
                 episode_reward += reward
 
-                if (n == (self.config.unroll_step) or _done) and self.trainMode:
+                if (n == UNROLL_STEP or _done):
                     self.localbuffer.append(nextState.copy())
                     if _done:
                         self.localbuffer.append(0)

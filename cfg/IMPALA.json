@@ -1,70 +1,53 @@
 {
-    "envName":"PongNoFrameskip-v4",
+    "REDIS_SERVER":"localhost",
+    "ALG":"IMPALA",
+    "REPLAY_MEMORY_LEN":10000,
+    "BUFFER_SIZE":9999,
+    "BATCHSIZE":32,
+    "GAMMA":0.99,
+    "C_LAMBDA":1,
+    "C_VALUE":1.0,
+    "P_VALUE":1.0,
+    "ENTROPY_R":0.001,                             
 
-    "lstmMode":false,
+    "ACTION_SIZE":6,
+    "UNROLL_STEP":20,
 
-    "replayMemory":10000,
-    "startMemory":9999,
-    "bufferSize":6,
-    "totalStep":1e6,
-    "batchSize":256,
-    "grayscale":true,
-    "gamma":0.99,
-    "c_lambda":1,
-    "c_value":1.0,
-    "p_value":1.0,
-    "EntropyRegularizer":0.001,                             
-    "clipingGradientNorm":40,
-    "stack":4,
-    "skipFrame":2,
-    "actionSize":6,
-    "stateSize":[4, 84, 84],
-    "unroll_step":20,
-    "gradientNorm":40,
-
-    "sPath":"./save/IMPALA/NoSkipPong.pth",
-    "writeTMode":true,
-    "tPath":"./tensorboard/IMPALA/PongNoSkip-v4",
-    "lPath":false,
-    "learnerDevice":"cuda:0",
-    "actorDevice":"cpu",
-    "hostName":"localhost",
-    "renderMode":false,
+    "DEVICE":"cpu",
+    "LEARNER_DEVICE":"cuda:0",
 
     "optim":{
-        "actor-critic":{
-            "name":"adam",
-            "lr":0.0001,
-            "decay":0.001
-        }
+        "name":"adam",
+        "lr":0.0001,
+        "decay":0.001
     },
-    "agent":{
-        "actor-critic":{
-            "module00":{
-                "netCat":"CNN2D",
-                "iSize":4,
-                "nLayer":3,
-                "fSize":[8, 4, -1],
-                "nUnit":[16, 32],
-                "padding":[0, 0],
-                "stride":[4, 2],
-                "act":["relu", "relu"],
-                "BN":[false, false, false],
-                "linear":true,
-                "input":[0],
-                "prior":0
-            },
-            "module01":{
-                "netCat":"MLP",
-                "iSize":2592,
-                "nLayer":2,
-                "fSize":[256, 7],
-                "act":["relu", "linear"],
-                "BN":false,
-                "prior":1,
-                "prevNodeNames":["module00"],
-                "output":true
-            }
+    
+    "model":{
+        "module00":{
+            "netCat":"CNN2D",
+            "iSize":4,
+            "nLayer":3,
+            "fSize":[8, 4, -1],
+            "nUnit":[16, 32],
+            "padding":[0, 0],
+            "stride":[4, 2],
+            "act":["relu", "relu"],
+            "BN":[false, false, false],
+            "linear":true,
+            "input":[0],
+            "prior":0
+        },
+        "module01":{
+            "netCat":"MLP",
+            "iSize":2592,
+            "nLayer":2,
+            "fSize":[256, 7],
+            "act":["relu", "linear"],
+            "BN":[false, false],
+            "prior":1,
+            "prevNodeNames":["module00"],
+            "output":true
         }
     }
+    
 }

@@ -1,10 +1,7 @@
 .vscode
+# cfg/*
 __pycache__
-tensorboard/*
-save/*
-.DS_Store
-__test
-test.py
-save
-Env
-SampleData
+log/*
+# data/*
+dump.rdb
+weight/*
