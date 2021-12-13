@@ -2,9 +2,8 @@
 
 ## Description
 
-![](./docs/img/Distributed_image.jpeg)
-
-This Repo is for implementation of Distributed RL,
+![](./docs/show.png)
+This Repo is for implementation of Distributed RL Algorithm,
 
 using by **Pytorch, Ray and Redis.**
 
@@ -12,15 +11,11 @@ Here is list of Algorithm I implemented (or will implement)
 
 ## Algorithms
 
-1. Soft Actor Critic
+1. IMPALA
 
-![](./docs/img/aa.gif)
+2. APE_X_DQN
 
-2. V_Trace, IMPALA
-
-3. Muzero
-
-4. R2D2
+3. R2D2
 
 ## Install
 
@@ -40,11 +35,23 @@ Here is list of Algorithm I implemented (or will implement)
     pip install -r requirements.txt
 
 
- **[Important] if you use mujoco environment, you must install mujoco-py from this.**
+**[Important] you must check ./cfg/<algorithm>.json. you can control the code by .json.**
 
-**[Important] you must check ./cfg/algorithm.json. you can control the code by .json.**
+**[Important] In configuration.py,  set the path !!**
+
 
  ## Run
 
+    #  you need independent two terminals. Each one is for learner and actor.
 
-    python run_sac.py --train --num-gpu=1 --num-cpu=8
+    sudo apt-get install tmux
+
+    tmux
+
+    python run_learner.py
+
+    # Crtl + b, then d
+
+    tmux
+
+    python run_actor.py --num-worker <n>
