@@ -17,11 +17,30 @@ Here is list of Algorithm I implemented (or will implement)
 
 3. R2D2
 
+---------------------------
+## Google Cloud Platform
+
+In APE-X DQN paper, the computer resources for experiment is below:
+
+    1. nCpus: 360+
+    2. RAM:256GB
+    3. GPU: V100
+    4. High Performance CPU for constructing data pipeline
+
+Probably, Most pepole can't satsify above conditions.
+
+Instead of buying it, I use Virtual Machine in GCP.
+
+GCP supports not only for enough resoruces but also for redis-server.
+
+-------------------------------
+
+
 ## Install
 
     Recommend you create the new development conda env for this repo.
 
-    conda create -n <env_name> python=3.6
+    conda create -n <env_name> python=3.7
 
     git clone https://github.com/seungju-mmc/Distributed_RL.git
 
@@ -61,7 +80,11 @@ Here is list of Algorithm I implemented (or will implement)
 
     1. More Cache memory, Better performance
 
-        I observed that lower cache memory of intel i7 9700k (12Mb) can be siginificant bottleneck for constructing data pipeline. You can check following lines in bash
+        I observed that lower cache memory of intel i7 9700k (12Mb) can be siginificant bottleneck for constructing data pipeline. 
+        
+
+
+        You can check following lines in bash
 
     
     sudo lshw -C memory
