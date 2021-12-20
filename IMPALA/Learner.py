@@ -26,12 +26,25 @@ class Learner:
         self.to()
 
         LOG_PATH = os.path.join(BASE_PATH, CURRENT_TIME)
-        self.writer = SummaryWriter(LOG_PATH)
+        if not os.path.isdir(
+            os.path.join(
+                './weight',
+                ALG,
+                CURRENT_TIME
+            )
+        ):
+            os.mkdir(
+                os.path.join(
+                    './weight',
+                    ALG,
+                    CURRENT_TIME
+                )
+            )
+        self.writer = SummaryWriter()
 
         info = writeTrainInfo(DATA)
         print(info)
         self.writer.add_text("configuration", info.info, 0)
-
 
         self.c_value = torch.tensor(C_VALUE).float().to(self.device)
         self.p_value = torch.tensor(P_VALUE).float().to(self.device)
@@ -73,7 +86,8 @@ class Learner:
         while True:
             if len(self._memory) > BUFFER_SIZE:
                 break
-            time.sleep(0.1)
+            time.sleep(1)
+            print(len(self._memory))
 
     def totensor(self, value, dtype=torch.float32):
         return torch.tensor(value, dtype=dtype).to(self.device)
@@ -95,12 +109,12 @@ class Learner:
         ind = ind.long()
         selectedLogProb = logProb.view(-1)[ind]
         selectedLogProb = selectedLogProb.view(-1, 1)
-        objActor = torch.sum(
+        objActor = torch.mean(
             selectedLogProb * actionTarget + ENTROPY_R * entropy
         )
 
         value = output[:, -1]
-        criticLoss = torch.sum((value - criticTarget[:, 0]).pow(2)) / 2
+        criticLoss = torch.mean((value - criticTarget[:, 0]).pow(2)) / 2
 
         return objActor, criticLoss, torch.mean(entropy).detach()
 
@@ -229,14 +243,16 @@ class Learner:
                 rewardSum = 0
                 for r in _Reward:
                     rewardSum += loads(r)
-                self.writer.add_scalar("Reward", rewardSum / len(_Reward), step)
+                self.writer.add_scalar(
+                    "Reward", rewardSum / len(_Reward), step)
             self.writer.add_scalar("Objective of Actor", _objActor, step)
             self.writer.add_scalar("Loss of Critic", _criticLoss, step)
             self.writer.add_scalar("Entropy", _entropy, step)
             self.writer.add_scalar("Advantage", _advantage, step)
             self.writer.add_scalar("Target Value", _Vtarget, step)
             self.writer.add_scalar("Value", _learnerValue, step)
-            self.writer.add_scalar("Target_minus_value", _target_minus_value, step)
+            self.writer.add_scalar("Target_minus_value",
+                                   _target_minus_value, step)
             self.writer.add_scalar("training_Time", time.time() - t, step)
 
     def step(self, step):

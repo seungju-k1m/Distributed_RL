@@ -12,6 +12,26 @@ import math
 _path_ = "./cfg/impala.json"
 # _path_ = './cfg/r2d2.json'
 
+_total_ALG=['IMPALA', 'R2D2', 'APE_X']
+if not os.path.isdir('./log'):
+    os.mkdir('./log')
+    for t in _total_ALG:
+        os.mkdir(
+            os.path.join(
+                './log', t
+        )
+        )
+
+if not os.path.isdir('./weight'):
+    os.mkdir('./weight')
+    for t in _total_ALG:
+        os.mkdir(
+            os.path.join(
+                './weight', t
+        )
+        )
+
+
 
 _parser_ = jsonParser(_path_)
 _data_ = _parser_.loadParser()
@@ -20,6 +40,7 @@ ALG = _data_['ALG']
 
 
 DATA = _data_
+
 
 # APE_X
 
@@ -62,7 +83,7 @@ REDIS_SERVER = _data_["REDIS_SERVER"]
 try:
     REDIS_SERVER_PUSH = _data_["REDIS_SERVER_PUSH"]
 except:
-    pass
+    REDIS_SERVER_PUSH = "localhost"
 
 DEVICE = _data_["DEVICE"]
 LEARNER_DEVICE = _data_["LEARNER_DEVICE"]
@@ -79,3 +100,10 @@ MODEL = _data_["model"]
 # SAVE and LOG PATH
 _current_time_ = datetime.now()
 CURRENT_TIME = _current_time_.strftime("%m_%d_%Y_%H_%M_%S")
+
+_log_p = os.path.join(
+    './log', ALG, CURRENT_TIME
+)
+_log_w = os.path.join(
+    './weight', ALG, CURRENT_TIME
+)

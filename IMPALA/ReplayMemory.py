@@ -63,8 +63,9 @@ class Replay(threading.Thread):
             pipe.ltrim("trajectory", -1, 0)
             data += pipe.execute()[0]
             if len(data) > 0:
-                for d in data:
-                    self._memory.push(d)
+                # for d in data:
+                #     self._memory.push(d)
+                self._memory.push(data)
                 data.clear()
                 if len(self._memory) > BUFFER_SIZE:
                     if len(self.deque) < 12:

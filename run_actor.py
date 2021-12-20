@@ -53,7 +53,4 @@ if __name__ == "__main__":
         )
 
     ray.get([p.run.remote() for p in players])
-    
     # ---------------------------------------
-
-    

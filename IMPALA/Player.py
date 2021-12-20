@@ -131,6 +131,8 @@ class Player:
         pastbuffer = []
         keys = ['ale.lives', 'lives']
         key = "ale.lives"
+        per_episode = 10
+        step_time_gen = time.time()
         
 
         for t in count():
@@ -190,8 +192,11 @@ class Player:
                     pastbuffer = self.localbuffer.copy()
 
                     self.localbuffer.clear()
-                    self._pull_param()
+                    # self._pull_param()
                     n = 0
+                
+                if (step % 400 == 0):
+                    self._pull_param()
 
                 if done is False:
                     self.localbuffer.append(nextState.copy())
@@ -202,16 +207,18 @@ class Player:
                     rewards += episode_reward
                     episode_reward = 0
 
-            gc.collect()
+            # gc.collect()
 
             episode += 1
 
-            if (episode % 50) == 0:
+            if (episode % per_episode) == 0:
+                x = time.time() - step_time_gen
                 print(
                     """
-                Episode:{} // Step:{} // Reward:{}
+                Episode:{} // Step:{} // Reward:{} // Time:{:.3f}
                 """.format(
-                        episode, step, rewards / 50
+                        episode, step, rewards / per_episode, x / per_episode
                     )
                 )
                 rewards = 0
+                step_time_gen = time.time()

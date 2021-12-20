@@ -8,7 +8,7 @@
     "C_LAMBDA":1,
     "C_VALUE":1.0,
     "P_VALUE":1.0,
-    "ENTROPY_R":0.001,                             
+    "ENTROPY_R":0.01,                             
 
     "ACTION_SIZE":6,
     "UNROLL_STEP":20,
@@ -17,9 +17,9 @@
     "LEARNER_DEVICE":"cuda:0",
 
     "optim":{
-        "name":"adam",
-        "lr":0.0001,
-        "decay":0.001
+        "name":"rmsprop",
+        "lr":6e-4,
+        "decay":0
     },
     
     "model":{
