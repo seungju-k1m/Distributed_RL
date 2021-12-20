@@ -80,11 +80,10 @@ GCP supports not only for enough resoruces but also for redis-server.
 
     1. More Cache memory, Better performance
 
-        I observed that lower cache memory of intel i7 9700k (12Mb) can be siginificant bottleneck for constructing data pipeline. 
-        
+        I observed that lower cache memory of intel i7 9700k (12Mb) can be bottleneck for constructing data pipeline in learer side. 
 
-
-        You can check following lines in bash
+        I recommend you use more than 30MB L3 cache memory.
+        You can check cache memory specification using following line in terminal.
 
     
     sudo lshw -C memory
