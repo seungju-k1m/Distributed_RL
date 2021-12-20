@@ -80,9 +80,11 @@ GCP supports not only for enough resoruces but also for redis-server.
 
     1. More Cache memory, Better performance
 
-        I observed that lower cache memory of intel i7 9700k (12Mb) can be bottleneck for constructing data pipeline in learer side. 
+        I observed that lower cache memory of intel i7 9700k (12Mb) can be bottleneck for constructing data pipeline in learer side.
 
-        I recommend you use more than 30MB L3 cache memory.
+        In GCP, using Redis server supported by GCP, there is no bottlenect. 
+
+        I recommend you use more than 30MB L3 cache memory or use GCP.
         You can check cache memory specification using following line in terminal.
 
     
