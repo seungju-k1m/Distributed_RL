@@ -55,3 +55,13 @@ Here is list of Algorithm I implemented (or will implement)
     tmux
 
     python run_actor.py --num-worker <n>
+
+
+## BottleNecks
+
+    1. More Cache memory, Better performance
+
+        I observed that lower cache memory of intel i7 9700k (12Mb) can be siginificant bottleneck for constructing data pipeline. You can check following lines in bash
+
+    
+    sudo lshw -C memory
