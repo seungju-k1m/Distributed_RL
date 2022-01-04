@@ -8,8 +8,8 @@ import torch
 import math
 
 
-# _path_ = "./cfg/ape_x.json"
-_path_ = "./cfg/impala.json"
+_path_ = "./cfg/ape_x.json"
+# _path_ = "./cfg/impala.json"
 # _path_ = './cfg/r2d2.json'
 
 _total_ALG=['IMPALA', 'R2D2', 'APE_X']
@@ -104,6 +104,7 @@ CURRENT_TIME = _current_time_.strftime("%m_%d_%Y_%H_%M_%S")
 _log_p = os.path.join(
     './log', ALG, CURRENT_TIME
 )
-_log_w = os.path.join(
+LOG_W = os.path.join(
     './weight', ALG, CURRENT_TIME
 )
+

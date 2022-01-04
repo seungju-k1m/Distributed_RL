@@ -14,10 +14,12 @@ import redis
 import _pickle as pickle
 
 import cProfile
+import os
 
 
 class Learner:
     def __init__(self):
+        os.mkdir(LOG_W)
         self.device = torch.device(LEARNER_DEVICE)
         self.build_model()
         self.build_optim()

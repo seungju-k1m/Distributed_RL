@@ -12,13 +12,13 @@
     "BETA":0.4,
     "GAMMA":0.99,
     "TARGET_FREQUENCY":2500,
-    "N":32,
+    "N":8,
     "BATCHSIZE":32,
 
     "DEVICE":"cpu",
     "LEARNER_DEVICE":"cuda:0",
 
-    "REPLAY_MEMORY_LEN":1000000,
+    "REPLAY_MEMORY_LEN":100000,
     "BUFFER_SIZE":50000,
     "UNROLL_STEP":3,
 

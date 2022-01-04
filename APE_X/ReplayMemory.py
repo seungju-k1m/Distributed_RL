@@ -39,17 +39,17 @@ class Replay(threading.Thread):
 
         self.idx = []
         self.vals = []
-    
-    def update(self, idx:list, vals:np.ndarray):
+
+    def update(self, idx: list, vals: np.ndarray):
         # self.update_list.append((idx, vals))
         with self._lock:
             self.idx += idx
             self.vals.append(vals)
-    
+
     def _update(self):
         with self._lock:
             if len(self.idx) == 0:
-                return 
+                return
             vals = np.concatenate(self.vals, axis=0)
             if len(vals) != len(self.idx):
                 print("!!")
@@ -61,14 +61,11 @@ class Replay(threading.Thread):
     def buffer(self, print_f=False):
         m = 16
         sample_time = time.time()
-        if self.use_PER:
-            experiences, prob, idx = self.memory.sample(BATCHSIZE * m)
-            n = len(self.memory)
-            weight = (1 / (n * prob)) ** BETA
-            weight /= self.memory.max_weight
-        else:
-            experiences = deepcopy(self.memory.sample(BATCHSIZE))
-        
+        experiences, prob, idx = self.memory.sample(BATCHSIZE * m)
+        n = len(self.memory)
+        weight = (1 / (n * prob)) ** BETA
+        weight /= self.memory.max_weight
+
         if print_f:
             print("---Sample Time:{:.3f}".format(time.time() - sample_time))
 
@@ -117,7 +114,7 @@ class Replay(threading.Thread):
         # done = [bool(i) for i in experiences[:, 4]]
         if print_f:
             print("-----PP_03:{:.3f}".format(preprocess_time - time.time()))
-    
+
     def run(self):
         t = 0
         data = []
@@ -127,7 +124,7 @@ class Replay(threading.Thread):
                     print("Cond is True")
                 self.cond = True
                 print(self.cond)
-            
+
             pipe = self.connect.pipeline()
             pipe.lrange("experience", 0, -1)
             pipe.ltrim("experience", -1, 0)
@@ -162,7 +159,7 @@ class Replay(threading.Thread):
                         self.buffer()
                     self.lock = False
             gc.collect()
-        
+
     def sample(self):
         if len(self.deque) > 0:
             return self.deque.pop(0)
@@ -178,7 +175,8 @@ class Replay_Server(threading.Thread):
         self.setDaemon(True)
         self._lock = threading.Lock()
         self.connect = redis.StrictRedis(host=REDIS_SERVER, port=6379)
-        self.connect_push = redis.StrictRedis(host=REDIS_SERVER_PUSH, port=6379)
+        self.connect_push = redis.StrictRedis(
+            host=REDIS_SERVER_PUSH, port=6379)
         # FLAG_BATCH
         # FLAG_ENOUGH
         # UPDATE !!
@@ -187,11 +185,11 @@ class Replay_Server(threading.Thread):
         self.deque_tmp = []
         self.idx = []
         self.vals = []
-    
-    def update(self, idx:list, vals:np.ndarray):
+
+    def update(self, idx: list, vals: np.ndarray):
         self.idx += idx
         self.vals.append(vals)
-    
+
     def process(self, d):
         m = 16
         state, action, reward, next_state, done, weight, idx = pickle.loads(d)
@@ -230,7 +228,7 @@ class Replay_Server(threading.Thread):
                     # self.process(data.pop(0))
                     self.deque += deepcopy(data)
                     data.clear()
-            
+
             if len(self.deque) > 32:
                 self.connect.set(
                     "FLAG_ENOUGH", pickle.dumps(True)
@@ -239,7 +237,7 @@ class Replay_Server(threading.Thread):
                 self.connect.set(
                     "FLAG_ENOUGH", pickle.dumps(False)
                 )
-            
+
             if len(self.idx) > 1000:
                 vals = np.concatenate(self.vals, 0)
                 update = (self.idx, vals)
@@ -251,7 +249,7 @@ class Replay_Server(threading.Thread):
 
     def sample(self):
         if len(self.deque) > 0:
-            
+
             # print(len(self.deque))
             return pickle.loads(self.deque.pop(0))
             # return self.deque.pop(0)

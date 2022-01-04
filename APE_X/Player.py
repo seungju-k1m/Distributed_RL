@@ -16,21 +16,20 @@ import random
 from PIL import Image as im
 
 
-
 class LocalBuffer:
 
     def __init__(self):
         self.storage = []
-    
+
     def push(self, s, a, r):
         s_ = deepcopy(s)
         a_ = deepcopy(a)
         r_ = deepcopy(r)
         self.storage += [s_, a_, r_]
-    
+
     def __len__(self):
         return int(len(self.storage) / 3)
-    
+
     def get_traj(self, done=False):
         if done:
             traj = [self.storage[-3*UNROLL_STEP]]
@@ -56,14 +55,14 @@ class LocalBuffer:
             # kk = np.random.choice([i+1 for i in range(UNROLL_STEP)], 1)[0]
             del self.storage[:3*UNROLL_STEP]
         return traj_
-    
+
     def clear(self):
         self.storage.clear()
 
 
 class Player():
 
-    def __init__(self, idx=0, train_mode: bool=True, end_time: str=None):
+    def __init__(self, idx=0, train_mode: bool = True, end_time: str = None):
         # super(Player, self).__init__()
         self.idx = idx
 
@@ -73,11 +72,10 @@ class Player():
         self.sim = gym.make('PongNoFrameskip-v4')
         zz = np.random.choice([i for i in range(idx*21+13)], 1)[0]
         self.sim.seed(int(zz))
-            
 
         self.device = torch.device(DEVICE)
         self.build_model()
-        self.target_epsilon =  0.4 **(1 + 7 * self.idx / (N-1))
+        self.target_epsilon = 0.4 ** (1 + 7 * self.idx / (N-1))
 
         self.to()
         self.train_mode = train_mode
@@ -94,11 +92,11 @@ class Player():
     def to(self):
         self.model.to(self.device)
         self.target_model.to(self.device)
-    
-    def forward(self, state:np.ndarray) -> int:
+
+    def forward(self, state: np.ndarray) -> int:
 
         epsilon = self.target_epsilon
-        
+
         if random.random() < epsilon:
             action = random.choice([0, 1, 2, 3, 4, 5])
         else:
@@ -106,14 +104,14 @@ class Player():
                 state = np.expand_dims(state, axis=0)
                 state = torch.tensor(state).float()
                 state = state * (1/255.)
-                
+
                 action_value = self.model.forward([state])[0]
 
                 action = int(action_value.argmax(dim=-1).numpy())
         return action, epsilon
 
     def pull_param(self):
-       
+
         count = self.connect.get("count")
         if count is not None:
             count = pickle.loads(count)
@@ -151,13 +149,15 @@ class Player():
             # next_state_value = t_val + t_adv - torch.mean(t_adv, dim=-1, keepdim=True)
             d = float(not d)
             action = int(state_value.argmax().cpu().detach().numpy())
-            max_next_state_value = float(next_state_value[action].cpu().detach().numpy()) * d
-            td_error = r + (GAMMA)**UNROLL_STEP * max_next_state_value - current_state_value
+            max_next_state_value = float(
+                next_state_value[action].cpu().detach().numpy()) * d
+            td_error = r + (GAMMA)**UNROLL_STEP * \
+                max_next_state_value - current_state_value
             td_error = min(1, max(td_error, -1))
             x = (abs(td_error) + 1e-7) ** ALPHA
-            
+
             return x
-        
+
     @staticmethod
     def rgb_to_gray(img, W=84, H=84):
         grayImage = im.fromarray(img, mode="RGB")
@@ -178,7 +178,7 @@ class Player():
             return state
         else:
             return None
-        
+
     def run(self):
         obsDeque = deque(maxlen=4)
         mean_cumulative_reward = 0
@@ -187,23 +187,25 @@ class Player():
         local_buffer = LocalBuffer()
         keys = ['ale.lives', 'lives']
         key = "ale.lives"
-        
+
         total_step = 0
 
         for t in count():
-            cumulative_reward = 0   
+            cumulative_reward = 0
             done = False
             live = -1
             experience = []
             local_buffer.clear()
             step = 0
 
+            time_epsiode = time.time()
+
             obs = self.sim.reset()
             obsDeque.clear()
 
             for i in range(4):
                 self.stack_obs(obs, obsDeque)
-            
+
             state = self.stack_obs(obs, obsDeque)
 
             action, _ = self.forward(state)
@@ -228,14 +230,14 @@ class Player():
                     except:
                         key = keys[1 - keys.index(key)]
                         live = info[key]
-                
+
                 if info[key] != 0:
                     _done = live != info[key]
                     if _done:
                         live = info[key]
                 else:
                     _done = reward != 0
-                
+
                 next_state = self.stack_obs(next_obs, obsDeque)
                 cumulative_reward += reward
                 local_buffer.push(state, action, reward)
@@ -258,17 +260,19 @@ class Player():
                         pickle.dumps(experience)
                     )
 
-                if step %  100 == 0:
+                if step % 100 == 0:
                     self.pull_param()
             mean_cumulative_reward += cumulative_reward
 
-            if (t+1) % per_episode == 0:
+            if (t + 1) % per_episode == 0:
+                x = (time.time() - time_epsiode) / step * 100
                 print("""
-                EPISODE:{} // REWARD:{:.3f} // EPSILON:{:.3f} // COUNT:{} // T_Version:{}
-                """.format(t+1, mean_cumulative_reward / per_episode, epsilon, self.count, self.target_model_version))
-                self.connect.rpush(
-                    "reward", pickle.dumps(
-                        mean_cumulative_reward / per_episode
+                EPISODE:{} // REWARD:{:.3f} // EPSILON:{:.3f} // COUNT:{} // T_Version:{} // Time:{:.3f}
+                """.format(t+1, mean_cumulative_reward / per_episode, epsilon, self.count, self.target_model_version, x))
+                if epsilon < 0.05:
+                    self.connect.rpush(
+                        "reward", pickle.dumps(
+                            mean_cumulative_reward / per_episode
+                        )
                     )
-                )
                 mean_cumulative_reward = 0
