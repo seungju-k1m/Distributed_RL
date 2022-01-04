@@ -326,10 +326,11 @@ class Player():
                 print("""
                 EPISODE:{} // REWARD:{:.3f} // EPSILON:{:.3f} // COUNT:{} // T_Version:{}
                 """.format(t+1, mean_cumulative_reward / per_episode, epsilon, self.count, self.target_model_version))
-                self.connect.rpush(
-                    "reward", pickle.dumps(
-                        mean_cumulative_reward / per_episode
+                if epsilon < 0.05:
+                    self.connect.rpush(
+                        "reward", pickle.dumps(
+                            mean_cumulative_reward / per_episode
+                        )
                     )
-                )
                 mean_cumulative_reward = 0
         
